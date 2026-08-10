@@ -13,7 +13,7 @@ I consume a lot of educational content, and a lot of the best resources I learn 
 
 On top of that, most of what I learn from these videos ends up getting applied back into agents and my own projects anyway. So instead of watching a video, taking notes by hand, and then turning those notes into something an agent can use, I figured I'd just cut out the middle step entirely.
 
-`vid2skill` takes a YouTube URL, pulls the transcript, and hands it to Claude to turn directly into either a [Claude Agent Skill](https://www.anthropic.com/news/agent-skills) (a `SKILL.md` ready to drop into any project) or a clean markdown summary — whichever you need.
+`vid2skill` takes a YouTube URL, pulls the transcript, and hands it to Claude to turn directly into either a [Claude Agent Skill](https://claude.com/blog/skills) (a `SKILL.md` ready to drop into any project) or a clean markdown summary — whichever you need.
 
 ## What it does
 

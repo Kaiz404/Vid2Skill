@@ -3,7 +3,7 @@ name = "vid2skill"
 version = "0.1.0"
 description = "Turn a YouTube video into a Claude Agent Skill or a markdown summary."
 requires-python = ">=3.10"
-dependencies = ["yt-dlp[default]", "rich", "rich-argparse"]
+dependencies = ["yt-dlp[default]", "rich", "rich-argparse", "faster-whisper"]
 
 [project.optional-dependencies]
 dev = ["pytest"]

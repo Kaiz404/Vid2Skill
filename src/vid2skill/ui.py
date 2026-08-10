@@ -15,7 +15,7 @@ err_console = Console(stderr=True)
 TICK_SECONDS = 2.5
 
 PHASE_FLAVORS: dict[str, list[str]] = {
-    "extract": ["Fetching transcript", "Wrangling captions", "Talking to YouTube"],
+    "extract": ["Fetching transcript", "Wrangling captions", "Talking to the platform"],
     "generate_skill": ["Cooking skill", "Simmering skill", "Distilling knowledge"],
     "generate_summary": ["Summarizing", "Condensing", "Boiling it down"],
     "retry": ["Redoing that", "Taking another pass"],

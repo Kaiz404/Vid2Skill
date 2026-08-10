@@ -39,3 +39,14 @@ def test_transcribe_audio_reuses_cached_model(monkeypatch):
     transcribe.transcribe_audio(Path("b.wav"), model_size="base")
 
     assert _FakeWhisperModel.instances == 1
+
+
+def test_transcribe_audio_reports_load_phase_only_on_first_call(monkeypatch):
+    monkeypatch.setattr("faster_whisper.WhisperModel", _FakeWhisperModel)
+    transcribe._model_cache.clear()
+    phases: list[str] = []
+
+    transcribe.transcribe_audio(Path("a.wav"), model_size="base", on_phase=phases.append)
+    transcribe.transcribe_audio(Path("b.wav"), model_size="base", on_phase=phases.append)
+
+    assert phases == ["load_whisper_model", "transcribe_audio", "transcribe_audio"]

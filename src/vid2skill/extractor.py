@@ -2,14 +2,22 @@ import json
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 import yt_dlp
 
 from vid2skill import urls
 
+OnPhase = Callable[[str], None] | None
+
 
 class TranscriptUnavailableError(RuntimeError):
     """Raised when a video's transcript/metadata cannot be fetched."""
+
+
+def _phase(on_phase: OnPhase, name: str) -> None:
+    if on_phase:
+        on_phase(name)
 
 
 @dataclass
@@ -34,17 +42,22 @@ def _parse_json3_captions(path: Path) -> str:
     return " ".join(lines)
 
 
-def extract(url: str, *, cookies_file: Path | None = None) -> VideoContent:
+def extract(
+    url: str, *, cookies_file: Path | None = None, on_phase: OnPhase = None
+) -> VideoContent:
     platform = urls.detect_platform(url)
     if platform == "instagram":
-        return _extract_instagram(url, cookies_file=cookies_file)
-    return _extract_youtube(url, cookies_file=cookies_file)
+        return _extract_instagram(url, cookies_file=cookies_file, on_phase=on_phase)
+    return _extract_youtube(url, cookies_file=cookies_file, on_phase=on_phase)
 
 
-def _extract_youtube(url: str, *, cookies_file: Path | None) -> VideoContent:
+def _extract_youtube(
+    url: str, *, cookies_file: Path | None, on_phase: OnPhase = None
+) -> VideoContent:
     video_id = urls.extract_video_id(url)
     normalized = urls.normalize_youtube_url(url)
 
+    _phase(on_phase, "fetch_captions")
     with tempfile.TemporaryDirectory() as tmpdir:
         ydl_opts = {
             "skip_download": True,
@@ -97,12 +110,15 @@ def _extract_youtube(url: str, *, cookies_file: Path | None) -> VideoContent:
     )
 
 
-def _extract_instagram(url: str, *, cookies_file: Path | None) -> VideoContent:
+def _extract_instagram(
+    url: str, *, cookies_file: Path | None, on_phase: OnPhase = None
+) -> VideoContent:
     from vid2skill import transcribe
 
     shortcode = urls.extract_reel_shortcode(url)
     normalized = urls.normalize_instagram_url(url)
 
+    _phase(on_phase, "download_audio")
     with tempfile.TemporaryDirectory() as tmpdir:
         ydl_opts = {
             "format": "bestaudio/best",
@@ -133,7 +149,9 @@ def _extract_instagram(url: str, *, cookies_file: Path | None) -> VideoContent:
         if not audio_files:
             raise TranscriptUnavailableError(f"No audio could be downloaded for {normalized}")
 
-        transcript_text = transcribe.transcribe_audio(audio_files[0])
+        transcript_text = transcribe.transcribe_audio(
+            audio_files[0], on_phase=lambda name: _phase(on_phase, name)
+        )
 
     if not transcript_text.strip():
         raise TranscriptUnavailableError(f"Could not transcribe audio for {normalized}")

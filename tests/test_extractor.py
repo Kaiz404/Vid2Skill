@@ -63,6 +63,15 @@ def test_extract_returns_transcript_and_title(monkeypatch):
     assert "Hello world. Second line." in content.transcript_markdown
 
 
+def test_extract_youtube_reports_fetch_captions_phase(monkeypatch):
+    monkeypatch.setattr(extractor.yt_dlp, "YoutubeDL", _FakeYoutubeDL)
+    phases: list[str] = []
+
+    extractor.extract("https://www.youtube.com/watch?v=abc12345678", on_phase=phases.append)
+
+    assert phases == ["fetch_captions"]
+
+
 def test_extract_passes_node_js_runtime(monkeypatch):
     monkeypatch.setattr(extractor.yt_dlp, "YoutubeDL", _FakeYoutubeDL)
 
@@ -188,3 +197,20 @@ def test_extract_instagram_raises_when_transcript_empty(monkeypatch):
 
     with pytest.raises(TranscriptUnavailableError, match="Could not transcribe"):
         extractor.extract(INSTAGRAM_URL)
+
+
+def test_extract_instagram_reports_download_and_transcribe_phases(monkeypatch):
+    monkeypatch.setattr(extractor.yt_dlp, "YoutubeDL", _FakeYoutubeDLAudio)
+
+    def fake_transcribe_audio(path, *, model_size="base", on_phase=None):
+        if on_phase:
+            on_phase("load_whisper_model")
+            on_phase("transcribe_audio")
+        return "text"
+
+    monkeypatch.setattr("vid2skill.transcribe.transcribe_audio", fake_transcribe_audio)
+    phases: list[str] = []
+
+    extractor.extract(INSTAGRAM_URL, on_phase=phases.append)
+
+    assert phases == ["download_audio", "load_whisper_model", "transcribe_audio"]

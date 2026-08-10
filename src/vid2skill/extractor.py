@@ -35,6 +35,13 @@ def _parse_json3_captions(path: Path) -> str:
 
 
 def extract(url: str, *, cookies_file: Path | None = None) -> VideoContent:
+    platform = urls.detect_platform(url)
+    if platform == "instagram":
+        return _extract_instagram(url, cookies_file=cookies_file)
+    return _extract_youtube(url, cookies_file=cookies_file)
+
+
+def _extract_youtube(url: str, *, cookies_file: Path | None) -> VideoContent:
     video_id = urls.extract_video_id(url)
     normalized = urls.normalize_youtube_url(url)
 
@@ -84,6 +91,57 @@ def extract(url: str, *, cookies_file: Path | None = None) -> VideoContent:
 
     return VideoContent(
         video_id=video_id,
+        url=normalized,
+        title=title,
+        transcript_markdown=f"### Transcript\n{transcript_text}\n",
+    )
+
+
+def _extract_instagram(url: str, *, cookies_file: Path | None) -> VideoContent:
+    from vid2skill import transcribe
+
+    shortcode = urls.extract_reel_shortcode(url)
+    normalized = urls.normalize_instagram_url(url)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ydl_opts = {
+            "format": "bestaudio/best",
+            "outtmpl": str(Path(tmpdir) / "%(id)s.%(ext)s"),
+            "quiet": True,
+            "no_warnings": True,
+            "noprogress": True,
+            # Instagram has no caption tracks yt-dlp can pull, so we download
+            # audio only and transcribe it locally with faster-whisper instead.
+            "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "wav"}],
+        }
+        if cookies_file is not None:
+            ydl_opts["cookiefile"] = str(cookies_file)
+
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(normalized, download=True)
+        except Exception as e:
+            hint = (
+                ""
+                if cookies_file is not None
+                else " (Instagram often requires an authenticated session for automated "
+                "requests - pass --cookies <file exported from your browser>)"
+            )
+            raise TranscriptUnavailableError(f"Could not fetch {normalized}: {e}{hint}") from e
+
+        audio_files = sorted(Path(tmpdir).glob("*.wav"))
+        if not audio_files:
+            raise TranscriptUnavailableError(f"No audio could be downloaded for {normalized}")
+
+        transcript_text = transcribe.transcribe_audio(audio_files[0])
+
+    if not transcript_text.strip():
+        raise TranscriptUnavailableError(f"Could not transcribe audio for {normalized}")
+
+    title = (info or {}).get("title") or shortcode
+
+    return VideoContent(
+        video_id=shortcode,
         url=normalized,
         title=title,
         transcript_markdown=f"### Transcript\n{transcript_text}\n",

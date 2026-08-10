@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![Status](https://img.shields.io/badge/status-early--wip-yellow)
 
-Turn a YouTube video into a Claude Agent Skill or a markdown summary.
+Turn a YouTube video or Instagram Reel into a Claude Agent Skill or a markdown summary.
 
 <video src="https://github.com/user-attachments/assets/a674d672-f893-4d0e-8042-540f5a97f9ca" controls muted width="720"></video>
 
@@ -13,12 +13,13 @@ I consume a lot of educational content, and a lot of the best resources I learn 
 
 On top of that, most of what I learn from these videos ends up getting applied back into agents and my own projects anyway. So instead of watching a video, taking notes by hand, and then turning those notes into something an agent can use, I figured I'd just cut out the middle step entirely.
 
-`vid2skill` takes a YouTube URL, pulls the transcript, and hands it to Claude to turn directly into either a [Claude Agent Skill](https://claude.com/blog/skills) (a `SKILL.md` ready to drop into any project) or a clean markdown summary — whichever you need.
+`vid2skill` takes a YouTube or Instagram Reel URL, pulls the transcript, and hands it to Claude to turn directly into either a [Claude Agent Skill](https://claude.com/blog/skills) (a `SKILL.md` ready to drop into any project) or a clean markdown summary — whichever you need.
 
 ## What it does
 
 - **Skill mode** — generates a `SKILL.md` with proper YAML frontmatter (`name` + `description`), structured into an overview, key concepts, step-by-step instructions, and a reference section. Drop the output folder straight into `.claude/skills/` in any project.
 - **Summary mode** — generates a plain markdown summary (summary, key points, notable details) when you just want the notes, not a skill.
+- **YouTube and Instagram Reels** — YouTube transcripts come from its caption tracks; Instagram has none, so for Reels `vid2skill` downloads just the audio and transcribes it locally with [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (open-weight, runs on CPU, no API key or subscription).
 - **A terminal that doesn't leave you hanging** — a spinner tracks what's actually happening (fetching the transcript, generating the skill, retrying if the output came back malformed, writing the files) instead of sitting there silently for a minute or two.
 
 ## Example output
@@ -55,8 +56,11 @@ That's a 20-minute talk turned into something I can skim in under a minute and i
 
 - Python 3.10+
 - [Node.js](https://nodejs.org/) 22+ on your `PATH` — yt-dlp needs a JS runtime to solve YouTube's in-page challenge before it can fetch anything, and this project is pinned to use Node
+- [ffmpeg](https://ffmpeg.org/) on your `PATH` — needed by yt-dlp to extract audio from Instagram Reels before transcription
 - The [Claude Code](https://claude.com/product/claude-code) CLI (`claude`) installed, on your `PATH`, and logged in — `vid2skill` shells out to it, it doesn't call the API directly
-- Usually, a `cookies.txt` exported from a logged-in YouTube session — see [below](#cookies-usually-required)
+- Usually, a `cookies.txt` exported from a logged-in YouTube or Instagram session — see [below](#cookies-usually-required)
+
+Transcribing Instagram Reels also downloads a [faster-whisper](https://github.com/SYSTRAN/faster-whisper) model (a few hundred MB) from Hugging Face the first time it runs, then caches it locally — free, one-time, no account required.
 
 ## Install
 
@@ -76,11 +80,12 @@ This installs the `vid2skill` command.
 vid2skill "https://www.youtube.com/watch?v=..."
 vid2skill "https://youtu.be/..." --mode summary
 vid2skill "https://www.youtube.com/watch?v=..." --cookies cookies.txt --output-dir ./skills
+vid2skill "https://www.instagram.com/reel/..."
 ```
 
 | Flag | Default | Description |
 |---|---|---|
-| `url` | — | YouTube video URL (watch, `youtu.be`, shorts, embed, or live) |
+| `url` | — | YouTube video URL (watch, `youtu.be`, shorts, embed, or live) or Instagram Reel/post URL (`reel`, `reels`, or `p`) |
 | `--mode {skill,summary}` | `skill` | Generate a Claude Agent Skill or a plain markdown summary |
 | `--output-dir` | `./output` | Where the generated file(s) get written |
 | `--timeout` | `300` | Seconds to wait for the `claude` CLI to respond |
@@ -88,7 +93,7 @@ vid2skill "https://www.youtube.com/watch?v=..." --cookies cookies.txt --output-d
 
 ### Cookies (usually required)
 
-YouTube frequently blocks anonymous, unauthenticated caption requests, so you'll often need to pass a `cookies.txt` from a real logged-in session:
+YouTube frequently blocks anonymous, unauthenticated caption requests, and Instagram generally requires a logged-in session to fetch Reels at all, so you'll often need to pass a `cookies.txt` from a real logged-in session:
 
 <details>
 <summary>How to export cookies.txt</summary>
@@ -110,6 +115,9 @@ YouTube frequently blocks anonymous, unauthenticated caption requests, so you'll
 
 > [!NOTE]
 > If Node.js isn't installed, yt-dlp can't resolve real video formats (only image formats), and transcript fetching will fail even though the video clearly has captions.
+
+> [!NOTE]
+> Instagram Reels have no caption tracks, so their transcript comes from local speech-to-text (faster-whisper) on the downloaded audio instead of exact captions. Accuracy is generally good but not perfect, and Reels that are mostly on-screen text/visuals with little spoken narration will transcribe poorly since there's no audio to work with.
 
 > [!WARNING]
 > This is a young, single-author project — no automated CI, no published package, no license yet. It works well enough for daily use on my end, but expect rough edges.

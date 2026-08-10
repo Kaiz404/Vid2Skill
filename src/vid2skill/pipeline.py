@@ -19,7 +19,7 @@ def run(
             on_phase(name)
 
     phase("extract")
-    video = extractor.extract(url, cookies_file=cookies_file)
+    video = extractor.extract(url, cookies_file=cookies_file, on_phase=phase)
     stdin_payload = prompts.build_stdin_payload(video.title, video.url, video.transcript_markdown)
     instruction = (
         prompts.SKILL_MODE_INSTRUCTION if mode == "skill" else prompts.SUMMARY_MODE_INSTRUCTION

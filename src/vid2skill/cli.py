@@ -10,10 +10,14 @@ from vid2skill.errors import SkillGenerationFailedError
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="vid2skill",
-        description="Turn a YouTube video into a Claude Agent Skill or a markdown summary.",
+        description="Turn a YouTube video or Instagram Reel into a Claude Agent Skill or a markdown summary.",
         formatter_class=RichHelpFormatter,
     )
-    parser.add_argument("url", help="YouTube video URL (watch, youtu.be, shorts, embed, or live)")
+    parser.add_argument(
+        "url",
+        help="YouTube video URL (watch, youtu.be, shorts, embed, or live) or "
+        "Instagram Reel/post URL (reel, reels, or p)",
+    )
     parser.add_argument("--mode", choices=["skill", "summary"], default="skill")
     parser.add_argument("--output-dir", type=Path, default=Path("./output"))
     parser.add_argument("--timeout", type=int, default=300, help="seconds to wait for the claude CLI")
@@ -42,8 +46,8 @@ def main(argv: list[str] | None = None) -> int:
                 on_phase=spinner.update_phase,
             )
             elapsed = spinner.elapsed
-    except urls.InvalidYouTubeURLError as e:
-        ui.error(f"not a valid YouTube URL: {e}")
+    except urls.InvalidVideoURLError as e:
+        ui.error(f"not a valid YouTube or Instagram URL: {e}")
         return 2
     except extractor.TranscriptUnavailableError as e:
         ui.error(str(e))

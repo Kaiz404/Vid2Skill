@@ -24,7 +24,7 @@ FAKE_VIDEO = extractor.VideoContent(
 )
 
 
-def _fake_extract(url, *, cookies_file=None):
+def _fake_extract(url, *, cookies_file=None, on_phase=None):
     return FAKE_VIDEO
 
 

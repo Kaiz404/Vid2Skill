@@ -1,7 +1,3 @@
-
-
-https://github.com/user-attachments/assets/a674d672-f893-4d0e-8042-540f5a97f9ca
-
 # vid2skill
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
@@ -9,7 +5,7 @@ https://github.com/user-attachments/assets/a674d672-f893-4d0e-8042-540f5a97f9ca
 
 Turn a YouTube video into a Claude Agent Skill or a markdown summary.
 
-<video src="https://github.com/Kaiz404/Vid2Skill/raw/master/demo.mp4" controls muted width="720"></video>
+<video src="https://github.com/user-attachments/assets/a674d672-f893-4d0e-8042-540f5a97f9ca" controls muted width="720"></video>
 
 ## Why this exists
 

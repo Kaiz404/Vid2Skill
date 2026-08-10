@@ -1,8 +1,9 @@
 import argparse
-import sys
 from pathlib import Path
 
-from vid2skill import extractor, llm, pipeline, urls
+from rich_argparse import RichHelpFormatter
+
+from vid2skill import extractor, llm, pipeline, ui, urls
 from vid2skill.errors import SkillGenerationFailedError
 
 
@@ -10,6 +11,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="vid2skill",
         description="Turn a YouTube video into a Claude Agent Skill or a markdown summary.",
+        formatter_class=RichHelpFormatter,
     )
     parser.add_argument("url", help="YouTube video URL (watch, youtu.be, shorts, embed, or live)")
     parser.add_argument("--mode", choices=["skill", "summary"], default="skill")
@@ -30,28 +32,31 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
     try:
-        path = pipeline.run(
-            args.url,
-            args.mode,
-            args.output_dir,
-            timeout=args.timeout,
-            cookies_file=args.cookies,
-        )
+        with ui.Spinner(mode=args.mode) as spinner:
+            path = pipeline.run(
+                args.url,
+                args.mode,
+                args.output_dir,
+                timeout=args.timeout,
+                cookies_file=args.cookies,
+                on_phase=spinner.update_phase,
+            )
+            elapsed = spinner.elapsed
     except urls.InvalidYouTubeURLError as e:
-        print(f"error: not a valid YouTube URL: {e}", file=sys.stderr)
+        ui.error(f"not a valid YouTube URL: {e}")
         return 2
     except extractor.TranscriptUnavailableError as e:
-        print(f"error: {e}", file=sys.stderr)
+        ui.error(str(e))
         return 3
     except llm.ClaudeCLINotFoundError as e:
-        print(f"error: {e}", file=sys.stderr)
+        ui.error(str(e))
         return 4
     except llm.ClaudeCLIError as e:
-        print(f"error: claude CLI call failed: {e}", file=sys.stderr)
+        ui.error(f"claude CLI call failed: {e}")
         return 5
     except SkillGenerationFailedError as e:
-        print(f"error: {e}", file=sys.stderr)
+        ui.error(str(e))
         return 6
 
-    print(f"Wrote {args.mode} output to {path}")
+    ui.success(f"Wrote {args.mode} output to {path} ({elapsed:.1f}s)")
     return 0

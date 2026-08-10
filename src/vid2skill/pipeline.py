@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Callable
 
 from vid2skill import extractor, llm, parsing, prompts, slugs, writer
 from vid2skill.errors import SkillGenerationFailedError
@@ -11,13 +12,20 @@ def run(
     *,
     timeout: int = 300,
     cookies_file: Path | None = None,
+    on_phase: Callable[[str], None] | None = None,
 ) -> Path:
+    def phase(name: str) -> None:
+        if on_phase:
+            on_phase(name)
+
+    phase("extract")
     video = extractor.extract(url, cookies_file=cookies_file)
     stdin_payload = prompts.build_stdin_payload(video.title, video.url, video.transcript_markdown)
     instruction = (
         prompts.SKILL_MODE_INSTRUCTION if mode == "skill" else prompts.SUMMARY_MODE_INSTRUCTION
     )
 
+    phase("generate")
     raw = llm.run_claude(instruction, stdin_payload, timeout=timeout).text
 
     if mode == "skill":
@@ -30,6 +38,7 @@ def run(
                 "Re-read the instructions above and output ONLY a corrected SKILL.md "
                 "with valid YAML frontmatter."
             )
+            phase("retry")
             raw = llm.run_claude(retry_instruction, stdin_payload, timeout=timeout).text
             try:
                 frontmatter, body = parsing.parse_skill_markdown(raw)
@@ -43,8 +52,10 @@ def run(
                 ) from second_err
 
         slug = slugs.resolve_skill_slug(frontmatter.get("name"), video.title, video.video_id)
+        phase("write")
         return writer.write_skill(output_dir, slug, frontmatter, body, video.url)
 
     body = parsing.parse_summary_markdown(raw)
     slug = slugs.slugify(video.title) or f"summary-{video.video_id}"
+    phase("write")
     return writer.write_summary(output_dir, slug, body, video.url)

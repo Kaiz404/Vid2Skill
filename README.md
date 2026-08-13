@@ -5,6 +5,8 @@
 
 Turn a YouTube video into a Claude Agent Skill or a markdown summary. Try it live at the deployed dashboard, or run it as a CLI.
 
+[recording-1786328280172.webm](https://github.com/user-attachments/assets/eaf8134b-997c-4fa0-a41a-2a3587055238)
+
 ## Why this exists
 
 I consume a lot of educational content, and a lot of the best resources I learn from are videos — 10, 20 minutes long, densely packed with high quality knowledge. The problem is that video is slow. I read faster than I watch, and I find reading a lot more engaging when the material is dense — I can skim, re-read a paragraph, and move at my own pace instead of the speaker's.

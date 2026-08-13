@@ -6,6 +6,25 @@ build/
 dist/
 output/
 
+.scratch/
+docs/
+
 # Contains live YouTube session auth tokens - never commit
 cookies.txt
 *.cookies.txt
+
+# Third-party service credentials for the web rewrite - never commit
+.env
+.env.local
+.env.*.local
+
+# Node / TypeScript
+node_modules/
+.next/
+*.tsbuildinfo
+.turbo/
+.vercel/
+coverage/
+
+.vercel
+.env*.local

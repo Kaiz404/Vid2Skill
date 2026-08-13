@@ -5,7 +5,7 @@
 
 Turn a YouTube video into a Claude Agent Skill or a markdown summary. Try it live at the deployed dashboard, or run it as a CLI.
 
-[recording-1786328280172.webm](https://github.com/user-attachments/assets/eaf8134b-997c-4fa0-a41a-2a3587055238)
+<video src="https://github.com/user-attachments/assets/a674d672-f893-4d0e-8042-540f5a97f9ca" controls muted width="720"></video>
 
 ## Why this exists
 

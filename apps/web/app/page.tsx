@@ -1,7 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { AlertIcon, ClockIcon, CopyIcon, DownloadIcon, LinkIcon } from "./icons";
+import { MarkdownView } from "./markdown-view";
+import { ThemeToggle } from "./theme-toggle";
+import { VideoPreview } from "./video-preview";
+import { tryExtractVideoId } from "../lib/youtube";
+
+/** Smoothly cross-fades the card between view states where the browser supports it. */
+function withViewTransition(update: () => void): void {
+  const doc = document as Document & {
+    startViewTransition?: (cb: () => void) => { finished: Promise<void> };
+  };
+  if (doc.startViewTransition) {
+    // A transition can be aborted (e.g. superseded by another, or the tab was hidden);
+    // that rejection is expected and not worth surfacing as an unhandled promise error.
+    doc.startViewTransition(() => flushSync(update)).finished.catch(() => {});
+  } else {
+    update();
+  }
+}
 
 type Mode = "skill" | "summary";
 type View = "idle" | "progress" | "result" | "error" | "busy";
@@ -20,6 +39,19 @@ interface JobSnapshot {
 const BUSY_MESSAGE = "2 of 2 generation slots are busy right now — try again in a minute or two.";
 const GENERIC_ERROR = "Something went wrong. Please try again.";
 
+const PHASE_TIPS: Record<string, string[]> = {
+  extract: ["Resolving the video…", "Reading the URL…"],
+  fetch_captions: ["Talking to YouTube…", "Pulling the transcript…", "Grabbing captions…"],
+  generate: [
+    "Reading through the transcript…",
+    "Picking out the key ideas…",
+    "Structuring the write-up…",
+    "Distilling knowledge…",
+  ],
+  retry: ["Taking another pass…", "Re-checking the output format…"],
+  write: ["Finalizing formatting…", "Wrapping things up…"],
+};
+
 function stepStatus(phase: string | undefined, target: "fetch" | "generate"): "pending" | "active" | "done" {
   const fetchPhases = new Set(["extract", "fetch_captions"]);
   const generatePhases = new Set(["generate", "retry"]);
@@ -33,6 +65,22 @@ function stepStatus(phase: string | undefined, target: "fetch" | "generate"): "p
   if (generatePhases.has(phase ?? "")) return "active";
   if (phase === "write") return "done";
   return "pending";
+}
+
+/** Cycles through a phase's rotating status lines so a long wait still feels alive. */
+function useRotatingTip(phase: string | undefined): string {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    setIndex(0);
+    const tips = PHASE_TIPS[phase ?? ""];
+    if (!tips || tips.length < 2) return;
+    const timer = setInterval(() => setIndex((i) => (i + 1) % tips.length), 2200);
+    return () => clearInterval(timer);
+  }, [phase]);
+
+  const tips = PHASE_TIPS[phase ?? ""];
+  return tips?.[index] ?? "Working on it…";
 }
 
 export default function Page() {
@@ -50,6 +98,9 @@ export default function Page() {
 
   const esRef = useRef<EventSource | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const videoId = useMemo(() => tryExtractVideoId(url), [url]);
+  const rotatingTip = useRotatingTip(phase);
 
   useEffect(() => {
     if (view !== "progress") return;
@@ -70,16 +121,21 @@ export default function Page() {
 
   const applySnapshot = useCallback(
     (snap: JobSnapshot) => {
-      if (snap.phase) setPhase(snap.phase);
       if (snap.status === "done") {
-        setResult({ title: snap.title, slug: snap.slug, content: snap.content, mode: snap.mode });
-        setView("result");
+        withViewTransition(() => {
+          setResult({ title: snap.title, slug: snap.slug, content: snap.content, mode: snap.mode });
+          setView("result");
+        });
         cleanupStream();
       } else if (snap.status === "error") {
-        setErrorHeading(snap.errorHeading || "Something went wrong");
-        setErrorMessage(snap.errorMessage || GENERIC_ERROR);
-        setView("error");
+        withViewTransition(() => {
+          setErrorHeading(snap.errorHeading || "Something went wrong");
+          setErrorMessage(snap.errorMessage || GENERIC_ERROR);
+          setView("error");
+        });
         cleanupStream();
+      } else if (snap.phase) {
+        setPhase(snap.phase);
       }
     },
     [cleanupStream],
@@ -137,11 +193,13 @@ export default function Page() {
     if (view === "progress" || view === "busy") return;
     if (!url.trim()) return;
 
-    setErrorHeading(undefined);
-    setErrorMessage(undefined);
-    setPhase("extract");
-    setElapsed(0);
-    setView("progress");
+    withViewTransition(() => {
+      setErrorHeading(undefined);
+      setErrorMessage(undefined);
+      setPhase("extract");
+      setElapsed(0);
+      setView("progress");
+    });
 
     try {
       const res = await fetch("/api/jobs", {
@@ -151,41 +209,51 @@ export default function Page() {
       });
 
       if (res.status === 429) {
-        setView("busy");
+        withViewTransition(() => setView("busy"));
         return;
       }
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
-        setErrorHeading(body.error === "invalid_url" ? "That doesn't look like a YouTube link" : "Something went wrong");
-        setErrorMessage(body.message || GENERIC_ERROR);
-        setView("error");
+        withViewTransition(() => {
+          setErrorHeading(body.error === "invalid_url" ? "That doesn't look like a YouTube link" : "Something went wrong");
+          setErrorMessage(body.message || GENERIC_ERROR);
+          setView("error");
+        });
         return;
       }
 
       const { id } = (await res.json()) as { id: string };
       startStream(id);
     } catch {
-      setErrorHeading("Something went wrong");
-      setErrorMessage(GENERIC_ERROR);
-      setView("error");
+      withViewTransition(() => {
+        setErrorHeading("Something went wrong");
+        setErrorMessage(GENERIC_ERROR);
+        setView("error");
+      });
     }
   }
 
   function startNew() {
     cleanupStream();
-    setView("idle");
-    setResult(null);
-    setErrorHeading(undefined);
-    setErrorMessage(undefined);
-    setPhase(undefined);
-    setUrl("");
+    withViewTransition(() => {
+      setView("idle");
+      setResult(null);
+      setErrorHeading(undefined);
+      setErrorMessage(undefined);
+      setPhase(undefined);
+      setUrl("");
+    });
   }
 
   async function copyContent() {
     if (!result?.content) return;
-    await navigator.clipboard.writeText(result.content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(result.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard access denied/unavailable - nothing more we can do here
+    }
   }
 
   function downloadContent() {
@@ -207,6 +275,7 @@ export default function Page() {
     <>
       <div className="page-head">
         <h1>vid2skill</h1>
+        <ThemeToggle />
       </div>
 
       <div className="card">
@@ -214,13 +283,14 @@ export default function Page() {
           <>
             <h2>{mode === "skill" ? "Generating your skill" : "Generating your summary"}</h2>
             <p className="sub">This usually takes under a minute.</p>
+            {videoId && <VideoPreview videoId={videoId} size="large" />}
             <div className="shimmer-bar" />
             <div className="stepper">
               <div className={`step ${fetchStatus === "done" ? "done" : ""}`}>
                 <div className={`step-dot ${fetchStatus}`}>{fetchStatus === "done" ? "✓" : "1"}</div>
                 <div>
                   <div className="step-label">Fetching transcript</div>
-                  <div className="step-sub">Talking to YouTube…</div>
+                  {fetchStatus === "active" && <div className="step-sub">{rotatingTip}</div>}
                 </div>
               </div>
               <div className={`step ${generateStatus === "done" ? "done" : ""}`}>
@@ -229,36 +299,46 @@ export default function Page() {
                   <div className="step-label">Generating with AI</div>
                   {generateStatus === "active" && (
                     <>
-                      <div className="step-sub">{phase === "retry" ? "Taking another pass…" : "Distilling knowledge…"}</div>
-                      <div className="step-note">auto-retries once if the model returns malformed output</div>
+                      <div className="step-sub">{rotatingTip}</div>
+                      {phase === "retry" && <div className="step-note">auto-retries once if the model returns malformed output</div>}
                     </>
                   )}
                 </div>
               </div>
             </div>
-            <div className="elapsed">{elapsed}s elapsed</div>
+            <div className="elapsed">
+              {elapsed}s elapsed
+              {elapsed > 25 && <span className="elapsed-note"> — some videos take a little longer, hang tight.</span>}
+            </div>
           </>
         )}
 
         {view === "result" && result && (
           <>
-            <div className="meta">
-              <span className="title">{result.title || "Your video"}</span>
+            <div className="result-head">
+              {videoId && <VideoPreview videoId={videoId} title={result.title} size="compact" />}
+              <div className="result-head-text">
+                <span className="title">{result.title || "Your video"}</span>
+                <span className="badge">{result.mode}</span>
+              </div>
             </div>
-            <span className="badge">{result.mode}</span>
-            <div className="content-box">{result.content}</div>
-            <div className="actions">
+
+            <div className="markdown-toolbar">
               <button className="primary-a" onClick={copyContent}>
                 <CopyIcon />
-                {copied ? "Copied!" : "Copy"}
+                {copied ? "Copied!" : "Copy Markdown"}
               </button>
               <button className="ghost" onClick={downloadContent}>
                 <DownloadIcon />
-                Download .md
+                Download Markdown
               </button>
-              <button className="ghost" onClick={startNew}>
+              <button className="ghost subtle" onClick={startNew}>
                 Start a new one
               </button>
+            </div>
+
+            <div className="markdown-panel">
+              <MarkdownView content={result.content ?? ""} mode={result.mode} />
             </div>
           </>
         )}
@@ -298,6 +378,13 @@ export default function Page() {
                 disabled={view === "busy"}
               />
             </div>
+
+            {videoId && (
+              <div className="url-preview">
+                <VideoPreview videoId={videoId} size="compact" />
+                <span className="url-preview-text">Looks like a valid YouTube link</span>
+              </div>
+            )}
 
             <div className={`toggle ${mode === "summary" ? "mode-second" : ""}`}>
               <div className="toggle-thumb" />

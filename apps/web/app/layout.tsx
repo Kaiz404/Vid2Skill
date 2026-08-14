@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AppBackground } from "./app-background";
 import { NO_FLASH_SCRIPT, ThemeProvider } from "./theme";
 
 export const metadata: Metadata = {
@@ -19,7 +20,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         ) : null}
       </head>
       <body suppressHydrationWarning>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <AppBackground />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

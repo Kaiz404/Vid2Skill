@@ -67,7 +67,7 @@ No accounts, no auth, no history kept server-side — jobs live in Redis for an 
 - [Node.js](https://nodejs.org/) 20+
 - [pnpm](https://pnpm.io/) 10+
 - A [Supadata](https://supadata.ai) API key (free tier: 100 credits/month)
-- An [OpenRouter](https://openrouter.ai) API key (the default model, `nvidia/nemotron-3-super-120b-a12b:free`, is free)
+- An [OpenRouter](https://openrouter.ai) API key (the pipeline uses OpenRouter's free model cascade)
 - For `apps/web` only: an [Upstash Redis](https://upstash.com) database (REST URL + token, free tier)
 
 ## Install

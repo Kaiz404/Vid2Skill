@@ -9,6 +9,8 @@ import { acquireRunLock, getJob, updateJob, type JobRecord } from "../../../../.
 import { releaseSlot } from "../../../../../lib/rateLimit";
 
 export const runtime = "nodejs";
+/** LLM + transcript work can exceed Vercel's default 10s function limit. */
+export const maxDuration = 300;
 
 const POLL_INTERVAL_MS = 1000;
 const MAX_STREAM_MS = 6 * 60_000;
@@ -77,6 +79,7 @@ async function runAndStream(
     });
     controller.enqueue(encoder.encode(sseMessage("done", jobSnapshot(updated!))));
   } catch (e) {
+    console.error("[vid2skill] job failed", id, e);
     const { heading, message } = friendlyError(e);
     const updated = await updateJob(id, { status: "error", errorHeading: heading, errorMessage: message });
     controller.enqueue(encoder.encode(sseMessage("error", jobSnapshot(updated!))));

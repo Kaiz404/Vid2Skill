@@ -111,3 +111,95 @@ export async function runLLM(
 
   throw new LLMError(errors.join(" | ") || "All OpenRouter models failed");
 }
+
+export interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
+interface OpenRouterStreamChunk {
+  choices?: { delta?: { content?: string | null } }[];
+  error?: { message?: string };
+}
+
+async function* readModelStream(res: Response, model: string): AsyncGenerator<string> {
+  if (!res.body) throw new LLMError(`${model}: OpenRouter returned no response body`);
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) return;
+    buffer += value;
+
+    let newline: number;
+    while ((newline = buffer.indexOf("\n")) !== -1) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      // Lines starting with ":" are OpenRouter keep-alive comments.
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (data === "[DONE]") return;
+
+      const chunk = JSON.parse(data) as OpenRouterStreamChunk;
+      if (chunk.error) throw new LLMError(`${model}: ${chunk.error.message ?? "stream error"}`);
+      const delta = chunk.choices?.[0]?.delta?.content;
+      if (delta) yield delta;
+    }
+  }
+}
+
+/**
+ * Streaming counterpart to `runLLM` for interactive chat. Falls through the
+ * same model cascade, but only until a model produces its first token: once
+ * text has reached the caller, a mid-stream failure is surfaced, not retried.
+ */
+export async function* streamLLM(
+  messages: ChatMessage[],
+  apiKey: string,
+  signal?: AbortSignal,
+): AsyncGenerator<string> {
+  const errors: string[] = [];
+
+  for (const model of MODEL_CASCADE) {
+    let res: Response;
+    try {
+      res = await fetch(OPENROUTER_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, messages, stream: true, max_tokens: 16_384, reasoning: { effort: "none" } }),
+        signal,
+      });
+    } catch (e) {
+      if ((e as Error).name === "AbortError") throw e;
+      errors.push(`${model}: ${(e as Error).message}`);
+      continue;
+    }
+
+    if (!res.ok) {
+      const payload = (await res.json().catch(() => ({}))) as OpenRouterResponse;
+      errors.push(`${model}: ${payload.error?.message ?? `status ${res.status}`}`);
+      continue;
+    }
+
+    const stream = readModelStream(res, model);
+    let first: IteratorResult<string>;
+    try {
+      first = await stream.next();
+    } catch (e) {
+      if ((e as Error).name === "AbortError") throw e;
+      errors.push((e as Error).message);
+      continue;
+    }
+    if (first.done) {
+      errors.push(`${model}: OpenRouter returned an empty result`);
+      continue;
+    }
+
+    yield first.value;
+    yield* stream;
+    return;
+  }
+
+  throw new LLMError(errors.join(" | ") || "All OpenRouter models failed");
+}

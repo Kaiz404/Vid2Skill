@@ -3,17 +3,31 @@ import { extractVideoId, normalizeYoutubeUrl } from "./urls.js";
 
 export type OnPhase = ((phase: string) => void) | undefined;
 
+/** A transcript chunk; times are in seconds from the start of the video. */
+export interface Segment {
+  start: number;
+  dur: number;
+  text: string;
+}
+
 export interface VideoContent {
   videoId: string;
   url: string;
   title: string;
+  segments: Segment[];
   transcriptMarkdown: string;
 }
 
 const SUPADATA_BASE_URL = "https://api.supadata.ai/v1";
 
+interface SupadataSegment {
+  text: string;
+  offset: number;
+  duration: number;
+}
+
 interface SupadataTranscriptResponse {
-  content: string;
+  content: SupadataSegment[];
   lang?: string;
   availableLangs?: string[];
 }
@@ -22,8 +36,50 @@ interface SupadataVideoResponse {
   title?: string;
 }
 
+/** Caption lines are a few seconds each; merging them keeps the LLM prompt
+ * compact while still giving citations ~20s resolution. */
+const CHUNK_SECONDS = 20;
+
 function phase(onPhase: OnPhase, name: string): void {
   onPhase?.(name);
+}
+
+export function chunkSegments(raw: SupadataSegment[], chunkSeconds = CHUNK_SECONDS): Segment[] {
+  const chunks: Segment[] = [];
+  let current: { start: number; end: number; parts: string[] } | undefined;
+
+  for (const seg of raw) {
+    const text = seg.text.replace(/\s+/g, " ").trim();
+    if (!text) continue;
+    const start = seg.offset / 1000;
+    const end = start + seg.duration / 1000;
+
+    if (current && start - current.start < chunkSeconds) {
+      current.parts.push(text);
+      current.end = Math.max(current.end, end);
+      continue;
+    }
+    if (current) chunks.push(toSegment(current));
+    current = { start, end, parts: [text] };
+  }
+  if (current) chunks.push(toSegment(current));
+  return chunks;
+}
+
+function toSegment(c: { start: number; end: number; parts: string[] }): Segment {
+  return { start: Math.floor(c.start), dur: Math.round(c.end - c.start), text: c.parts.join(" ") };
+}
+
+export function formatTimestamp(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = String(s % 60).padStart(2, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
+}
+
+export function formatTranscript(segments: Segment[]): string {
+  return segments.map((seg) => `[${formatTimestamp(seg.start)}] ${seg.text}`).join("\n");
 }
 
 async function supadataGet<T>(path: string, apiKey: string, params: Record<string, string>): Promise<T> {
@@ -68,7 +124,7 @@ export async function extract(
   try {
     transcriptRes = await supadataGet<SupadataTranscriptResponse>("/youtube/transcript", apiKey, {
       videoId,
-      text: "true",
+      text: "false",
       mode: "auto",
     });
     videoRes = await supadataGet<SupadataVideoResponse>("/youtube/video", apiKey, { id: videoId });
@@ -77,8 +133,8 @@ export async function extract(
     throw new TranscriptUnavailableError(`Could not fetch ${normalized}: ${(e as Error).message}`);
   }
 
-  const transcriptText = (transcriptRes.content ?? "").trim();
-  if (!transcriptText) {
+  const segments = chunkSegments(Array.isArray(transcriptRes.content) ? transcriptRes.content : []);
+  if (segments.length === 0) {
     throw new TranscriptUnavailableError(`No captions available for ${normalized}`);
   }
 
@@ -88,6 +144,7 @@ export async function extract(
     videoId,
     url: normalized,
     title,
-    transcriptMarkdown: `### Transcript\n${transcriptText}\n`,
+    segments,
+    transcriptMarkdown: `### Transcript\n${formatTranscript(segments)}\n`,
   };
 }

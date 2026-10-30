@@ -25,7 +25,8 @@ Output format requirements - follow exactly:
    - ## Summary - concise overview (1-2 paragraphs)
    - ## Key Points - bulleted list of main takeaways
    - ## Notable Details - specific facts, numbers, quotes, or references worth preserving
-4. Do not fabricate information absent from the transcript. Do NOT include YAML frontmatter - this is a plain summary, not a Claude skill.
+4. Each transcript line starts with a timestamp like [12:34]. End every Key Points and Notable Details bullet with the timestamp of the transcript line it comes from, copied exactly in square brackets, e.g. "- Caching cut latency in half [12:34]". Only use timestamps that appear in the transcript.
+5. Do not fabricate information absent from the transcript. Do NOT include YAML frontmatter - this is a plain summary, not a Claude skill.
 
 The transcript follows below.`;
 

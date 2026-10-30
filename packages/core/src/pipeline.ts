@@ -21,6 +21,8 @@ export interface PipelineResult {
   slug: string;
   title: string;
   sourceUrl: string;
+  videoId: string;
+  segments: transcript.Segment[];
   /** Rendered final markdown, ready to write to disk or return as-is. */
   content: string;
 }
@@ -71,6 +73,8 @@ export async function run(url: string, mode: Mode, options: PipelineOptions): Pr
       slug,
       title: video.title,
       sourceUrl: video.url,
+      videoId: video.videoId,
+      segments: video.segments,
       content: renderSkillMarkdown(slug, parsed.frontmatter, parsed.body, video.url),
     };
   }
@@ -83,6 +87,8 @@ export async function run(url: string, mode: Mode, options: PipelineOptions): Pr
     slug,
     title: video.title,
     sourceUrl: video.url,
+    videoId: video.videoId,
+    segments: video.segments,
     content: renderSummaryMarkdown(body, video.url),
   };
 }

@@ -16,6 +16,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     title: job.title,
     slug: job.slug,
     content: job.content,
+    videoId: job.videoId,
+    segments: job.segments,
     errorHeading: job.errorHeading,
     errorMessage: job.errorMessage,
   });

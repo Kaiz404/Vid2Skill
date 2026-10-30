@@ -43,6 +43,8 @@ function jobSnapshot(job: JobRecord) {
     title: job.title,
     slug: job.slug,
     content: job.content,
+    videoId: job.videoId,
+    segments: job.segments,
     errorHeading: job.errorHeading,
     errorMessage: job.errorMessage,
   };
@@ -76,6 +78,8 @@ async function runAndStream(
       title: result.title,
       slug: result.slug,
       content: result.content,
+      videoId: result.videoId,
+      segments: result.segments,
     });
     controller.enqueue(encoder.encode(sseMessage("done", jobSnapshot(updated!))));
   } catch (e) {

@@ -11,7 +11,8 @@ const FAKE_VIDEO: transcriptModule.VideoContent = {
   videoId: "abc12345678",
   url: "https://www.youtube.com/watch?v=abc12345678",
   title: "Some Video",
-  transcriptMarkdown: "### Transcript\nsome transcript text",
+  segments: [{ start: 0, dur: 5, text: "some transcript text" }],
+  transcriptMarkdown: "### Transcript\n[0:00] some transcript text",
 };
 
 const VALID_SKILL = `---

@@ -1,4 +1,4 @@
-import type { Mode } from "@vid2skill/core";
+import type { Mode, transcript } from "@vid2skill/core";
 import { redis } from "./redis";
 
 export type JobStatus = "queued" | "running" | "done" | "error";
@@ -12,6 +12,8 @@ export interface JobRecord {
   title?: string;
   slug?: string;
   content?: string;
+  videoId?: string;
+  segments?: transcript.Segment[];
   errorHeading?: string;
   errorMessage?: string;
   createdAt: number;

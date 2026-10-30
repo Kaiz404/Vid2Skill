@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ChatIntent, ChatMessage, DocVersion, Segment } from "../lib/session";
+import { AiSphere } from "./ai-sphere";
 import { ArrowUpIcon, StopIcon } from "./icons";
 import { MarkdownView } from "./markdown-view";
 
@@ -107,13 +108,19 @@ export function ChatPanel({
             {draft.text ? (
               <MarkdownView content={draft.text} mode="summary" segments={segments} />
             ) : (
-              <span className="msg-pending">Reading the transcript…</span>
+              <span className="msg-pending">
+                <AiSphere state="searching" size={28} />
+                Reading the transcript…
+              </span>
             )}
           </div>
         )}
         {draft?.intent === "edit" && (
           <div className="msg msg-revision pending">
-            Rewriting the {docNoun} (v{versions.length + 1})…
+            <span className="msg-pending">
+              <AiSphere state="composing" size={24} />
+              Rewriting the {docNoun} (v{versions.length + 1})…
+            </span>
           </div>
         )}
       </div>

@@ -12,6 +12,7 @@
   "dependencies": {
     "@upstash/redis": "^1.34.3",
     "@vid2skill/core": "workspace:*",
+    "ai-spheres": "github:Edwson/Ai-Spheres#cddc84066f76db2656819cecb076abf95b3e9f6c",
     "highlight.js": "^11.12.0",
     "idb-keyval": "^6.3.0",
     "next": "^15.1.3",

@@ -1390,8 +1390,21 @@ a {
 }
 
 .msg-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   color: var(--dim);
-  animation: fadeIn 0.6s ease infinite alternate;
+}
+
+.progress-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.progress-head .sub {
+  margin-bottom: 0;
 }
 
 .msg-error {

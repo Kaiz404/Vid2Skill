@@ -54,6 +54,9 @@ importers:
       '@vid2skill/core':
         specifier: workspace:*
         version: link:../../packages/core
+      ai-spheres:
+        specifier: github:Edwson/Ai-Spheres#cddc84066f76db2656819cecb076abf95b3e9f6c
+        version: https://codeload.github.com/Edwson/Ai-Spheres/tar.gz/cddc84066f76db2656819cecb076abf95b3e9f6c
       highlight.js:
         specifier: ^11.12.0
         version: 11.12.0
@@ -831,6 +834,10 @@ packages:
 
   '@vitest/utils@2.1.9':
     resolution: {integrity: sha512-v0psaMSkNJ3A2NMrUEHFRzJtDPFn+/VWZ5WxImB21T9fjucJRmS7xCS3ppEnARb9y11OAzaD+P2Ps+b+BGX5iQ==}
+
+  ai-spheres@https://codeload.github.com/Edwson/Ai-Spheres/tar.gz/cddc84066f76db2656819cecb076abf95b3e9f6c:
+    resolution: {tarball: https://codeload.github.com/Edwson/Ai-Spheres/tar.gz/cddc84066f76db2656819cecb076abf95b3e9f6c}
+    version: 1.0.0
 
   ansi-regex@6.3.0:
     resolution: {integrity: sha512-WpDfL7NO6j7tH88IDBNVdUJxDh9nmCteAVW9dsep846XdwF4naCBK+/tGLX3KJgcpgMRXCFlTM2hKGoK9FsdrQ==}
@@ -1930,6 +1937,8 @@ snapshots:
       '@vitest/pretty-format': 2.1.9
       loupe: 3.2.1
       tinyrainbow: 1.2.0
+
+  ai-spheres@https://codeload.github.com/Edwson/Ai-Spheres/tar.gz/cddc84066f76db2656819cecb076abf95b3e9f6c: {}
 
   ansi-regex@6.3.0: {}
 

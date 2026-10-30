@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { AiSphere, type SphereState } from "./ai-sphere";
 import { AlertIcon, ClockIcon, LinkIcon } from "./icons";
 import { RecentSessions } from "./recent-sessions";
 import { ThemeToggle } from "./theme-toggle";
@@ -54,6 +55,14 @@ const PHASE_TIPS: Record<string, string[]> = {
   ],
   retry: ["Taking another pass…", "Re-checking the output format…"],
   write: ["Finalizing formatting…", "Wrapping things up…"],
+};
+
+const PHASE_SPHERE: Record<string, SphereState> = {
+  extract: "searching",
+  fetch_captions: "searching",
+  generate: "solving",
+  retry: "verifying",
+  write: "composing",
 };
 
 function stepStatus(phase: string | undefined, target: "fetch" | "generate"): "pending" | "active" | "done" {
@@ -267,10 +276,14 @@ export default function Page() {
       <div className="card">
         {view === "progress" && (
           <>
-            <h2>{mode === "skill" ? "Generating your skill" : "Generating your summary"}</h2>
-            <p className="sub">This usually takes under a minute.</p>
+            <div className="progress-head">
+              <AiSphere state={PHASE_SPHERE[phase ?? ""] ?? "working"} size={64} />
+              <div>
+                <h2>{mode === "skill" ? "Generating your skill" : "Generating your summary"}</h2>
+                <p className="sub">This usually takes under a minute.</p>
+              </div>
+            </div>
             {videoId && <VideoPreview videoId={videoId} size="large" />}
-            <div className="shimmer-bar" />
             <div className="stepper">
               <div className={`step ${fetchStatus === "done" ? "done" : ""}`}>
                 <div className={`step-dot ${fetchStatus}`}>{fetchStatus === "done" ? "✓" : "1"}</div>

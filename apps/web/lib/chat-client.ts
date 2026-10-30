@@ -27,10 +27,16 @@ export async function streamChat(
   onDelta: (text: string) => void,
   signal: AbortSignal,
 ): Promise<string> {
-  const messages = req.messages
-    .map(toWire)
-    .filter((m) => m !== null)
-    .slice(-HISTORY_LIMIT);
+  // An edit is a function of the current document and the instruction alone; earlier turns
+  // add nothing the document doesn't already reflect, and a prior Q&A answer in the history
+  // leads free models to reply with only the edited section instead of the whole document.
+  const messages =
+    req.intent === "edit"
+      ? req.messages.slice(-1).map(toWire).filter((m) => m !== null)
+      : req.messages
+          .map(toWire)
+          .filter((m) => m !== null)
+          .slice(-HISTORY_LIMIT);
 
   const res = await fetch("/api/chat", {
     method: "POST",

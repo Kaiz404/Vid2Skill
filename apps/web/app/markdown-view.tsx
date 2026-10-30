@@ -1,10 +1,13 @@
 "use client";
 
-import { isValidElement, useState, type ComponentPropsWithoutRef, type ReactNode } from "react";
+import { isValidElement, useMemo, useState, type ComponentPropsWithoutRef, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
-import { CheckIcon, CopyIcon } from "./icons";
+import { remarkTimestamps, resolveSegment } from "../lib/citations";
+import type { Segment } from "../lib/session";
+import { CheckIcon, CopyIcon, PlayIcon } from "./icons";
+import { useSeek } from "./player";
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/;
 
@@ -103,7 +106,26 @@ function Table({ children, ...props }: ComponentPropsWithoutRef<"table">) {
   );
 }
 
-const components: Components = {
+function TimestampChip({ seconds, label, segments }: { seconds: number; label: string; segments: Segment[] }) {
+  const seek = useSeek();
+  const segment = resolveSegment(segments, seconds);
+  if (!segment || !seek) return <span className="ts-chip ts-chip-dead">{label}</span>;
+
+  return (
+    <button
+      type="button"
+      className="ts-chip"
+      onClick={() => seek(seconds)}
+      title={`“${segment.text}”`}
+      aria-label={`Play from ${label}`}
+    >
+      <PlayIcon />
+      {label}
+    </button>
+  );
+}
+
+const baseComponents: Components = {
   pre: Pre,
   code: Code,
   a: Anchor,
@@ -113,10 +135,26 @@ const components: Components = {
 interface MarkdownViewProps {
   content: string;
   mode: "skill" | "summary";
+  /** When present, `[m:ss]` citations become chips that seek the workspace player. */
+  segments?: Segment[];
 }
 
-export function MarkdownView({ content, mode }: MarkdownViewProps) {
+export function MarkdownView({ content, mode, segments }: MarkdownViewProps) {
   const { name, description, body } = mode === "skill" ? extractFrontmatter(content) : { body: content, name: undefined, description: undefined };
+
+  const components = useMemo<Components>(() => {
+    if (!segments) return baseComponents;
+    return {
+      ...baseComponents,
+      cite: ({ node, children }) => (
+        <TimestampChip
+          seconds={Number(node?.properties?.dataSeconds)}
+          label={extractText(children)}
+          segments={segments}
+        />
+      ),
+    };
+  }, [segments]);
 
   return (
     <div className="markdown-view">
@@ -127,7 +165,11 @@ export function MarkdownView({ content, mode }: MarkdownViewProps) {
         </div>
       )}
       <div className="markdown-body">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={components}>
+        <ReactMarkdown
+          remarkPlugins={segments ? [remarkGfm, remarkTimestamps] : [remarkGfm]}
+          rehypePlugins={[rehypeHighlight]}
+          components={components}
+        >
           {body}
         </ReactMarkdown>
       </div>

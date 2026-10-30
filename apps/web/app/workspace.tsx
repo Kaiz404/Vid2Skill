@@ -168,56 +168,58 @@ export function Workspace({ initial }: { initial: Session }) {
       </div>
 
       <div className="workspace" data-tab={mobileTab}>
-        <section className="panel doc-panel">
-          <div className="doc-head">
-            <div className="result-head-text">
-              <span className="title">{session.title}</span>
-              <span className="badge">{session.mode}</span>
-            </div>
-            <div className="markdown-toolbar">
-              {session.versions.length > 1 && (
-                <select
-                  className="version-select"
-                  value={session.activeVersionId}
-                  disabled={editing}
-                  onChange={(e) => dispatch({ type: "selectVersion", versionId: e.target.value })}
-                  aria-label="Document version"
-                >
-                  {session.versions.map((v, i) => (
-                    <option key={v.id} value={v.id}>
-                      {versionLabel(session, v, i)}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <button className="primary-a" onClick={copyContent} disabled={editing}>
-                <CopyIcon />
-                {copied ? "Copied!" : "Copy"}
+        <div className="main-col">
+          <div className="main-scroll">
+            <VideoPlayer videoId={session.videoId} />
+
+            <div className={`toggle workspace-tabs ${mobileTab === "chat" ? "mode-second" : ""}`}>
+              <div className="toggle-thumb" />
+              <button type="button" className={mobileTab === "doc" ? "active" : ""} onClick={() => setMobileTab("doc")}>
+                {session.mode === "skill" ? "Skill" : "Summary"}
               </button>
-              <button className="ghost" onClick={downloadContent} disabled={editing}>
-                <DownloadIcon />
-                Download
+              <button type="button" className={mobileTab === "chat" ? "active" : ""} onClick={() => setMobileTab("chat")}>
+                Chat
               </button>
             </div>
-          </div>
-          {editing && <div className="shimmer-bar doc-shimmer" />}
-          <div className="markdown-panel">
-            <MarkdownView content={shownContent} mode={session.mode} segments={session.segments} />
-          </div>
-        </section>
 
-        <div className="video-slot">
-          <VideoPlayer videoId={session.videoId} />
-        </div>
-
-        <div className={`toggle workspace-tabs ${mobileTab === "chat" ? "mode-second" : ""}`}>
-          <div className="toggle-thumb" />
-          <button type="button" className={mobileTab === "doc" ? "active" : ""} onClick={() => setMobileTab("doc")}>
-            {session.mode === "skill" ? "Skill" : "Summary"}
-          </button>
-          <button type="button" className={mobileTab === "chat" ? "active" : ""} onClick={() => setMobileTab("chat")}>
-            Chat
-          </button>
+            <section className="panel doc-panel">
+              <div className="doc-head">
+                <div className="result-head-text">
+                  <span className="title">{session.title}</span>
+                  <span className="badge">{session.mode}</span>
+                </div>
+                <div className="markdown-toolbar">
+                  {session.versions.length > 1 && (
+                    <select
+                      className="version-select"
+                      value={session.activeVersionId}
+                      disabled={editing}
+                      onChange={(e) => dispatch({ type: "selectVersion", versionId: e.target.value })}
+                      aria-label="Document version"
+                    >
+                      {session.versions.map((v, i) => (
+                        <option key={v.id} value={v.id}>
+                          {versionLabel(session, v, i)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <button className="primary-a" onClick={copyContent} disabled={editing}>
+                    <CopyIcon />
+                    {copied ? "Copied!" : "Copy"}
+                  </button>
+                  <button className="ghost" onClick={downloadContent} disabled={editing}>
+                    <DownloadIcon />
+                    Download
+                  </button>
+                </div>
+              </div>
+              {editing && <div className="shimmer-bar doc-shimmer" />}
+              <div className="markdown-panel">
+                <MarkdownView content={shownContent} mode={session.mode} segments={session.segments} />
+              </div>
+            </section>
+          </div>
         </div>
 
         <ChatPanel

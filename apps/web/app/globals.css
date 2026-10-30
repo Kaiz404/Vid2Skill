@@ -1133,12 +1133,24 @@ a {
   height: calc(100dvh - 120px);
   min-height: 560px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-areas:
-    "doc video"
-    "doc chat";
+  grid-template-columns: minmax(0, 1fr) 400px;
+  grid-template-rows: minmax(0, 1fr);
   gap: 16px;
+}
+
+.main-col {
+  position: relative;
+  min-height: 0;
+}
+
+.main-scroll {
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border-radius: 14px;
+  scrollbar-gutter: stable;
 }
 
 .panel {
@@ -1154,7 +1166,8 @@ a {
 }
 
 .doc-panel {
-  grid-area: doc;
+  flex: none;
+  min-height: auto;
   padding: 20px 22px 22px;
 }
 
@@ -1176,9 +1189,8 @@ a {
 }
 
 .workspace .markdown-panel {
-  flex: 1;
-  min-height: 0;
   max-height: none;
+  overflow: visible;
 }
 
 .workspace .markdown-body {
@@ -1206,9 +1218,11 @@ a {
 }
 
 .video-slot {
-  grid-area: video;
+  flex: none;
+  aspect-ratio: 16 / 9;
 }
 
+.video-mount,
 .video-player iframe {
   display: block;
   width: 100%;
@@ -1216,8 +1230,33 @@ a {
   border: 0;
 }
 
+.video-player.docked {
+  position: absolute;
+  right: 22px;
+  bottom: 16px;
+  width: min(360px, 55%);
+  height: auto;
+  z-index: 5;
+  box-shadow: 0 10px 30px var(--shadow-color-strong);
+  animation: fadeUp 0.25s ease both;
+}
+
+.video-undock {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--scrim);
+  color: #fff;
+  cursor: pointer;
+}
+
 .workspace-tabs {
-  grid-area: tabs;
   display: none;
 }
 
@@ -1262,7 +1301,6 @@ a {
 /* Chat */
 
 .chat-panel {
-  grid-area: chat;
   overflow: hidden;
 }
 
@@ -1529,28 +1567,31 @@ a {
     height: calc(100dvh - 72px);
     min-height: 0;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
-    grid-template-areas:
-      "video"
-      "tabs"
-      "main";
+    gap: 10px;
+  }
+
+  .workspace[data-tab="chat"] {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .main-scroll {
     gap: 10px;
   }
 
   .workspace-tabs {
     display: inline-grid;
-    justify-self: center;
+    align-self: center;
+    flex: none;
     margin: 0;
-  }
-
-  .doc-panel,
-  .chat-panel {
-    grid-area: main;
   }
 
   .workspace[data-tab="chat"] .doc-panel,
   .workspace[data-tab="doc"] .chat-panel {
     display: none;
+  }
+
+  .chat-panel {
+    grid-row: 2;
   }
 
   .doc-panel {

@@ -53,3 +53,17 @@ export async function reserveSlot(jobId: string): Promise<ReservationResult> {
 export async function releaseSlot(jobId: string): Promise<void> {
   await redis().zrem(CONCURRENCY_KEY, jobId);
 }
+
+/** Chat turns are cheap relative to a full generation but still spend the shared
+ * OpenRouter key, so they get their own global hourly bucket. */
+const CHAT_HOURLY_QUOTA = 150;
+
+export async function reserveChatTurn(): Promise<boolean> {
+  const r = redis();
+  const key = `vid2skill:chat-hourly:${Math.floor(Date.now() / 3_600_000)}`;
+  const count = await r.incr(key);
+  if (count === 1) {
+    await r.expire(key, 3600);
+  }
+  return count <= CHAT_HOURLY_QUOTA;
+}

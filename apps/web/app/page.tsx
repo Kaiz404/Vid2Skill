@@ -1,11 +1,13 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { AlertIcon, ClockIcon, CopyIcon, DownloadIcon, LinkIcon } from "./icons";
-import { MarkdownView } from "./markdown-view";
+import { AlertIcon, ClockIcon, LinkIcon } from "./icons";
+import { RecentSessions } from "./recent-sessions";
 import { ThemeToggle } from "./theme-toggle";
 import { VideoPreview } from "./video-preview";
+import { addSession, type Segment } from "../lib/session";
 import { tryExtractVideoId } from "../lib/youtube";
 
 /** Smoothly cross-fades the card between view states where the browser supports it. */
@@ -23,7 +25,7 @@ function withViewTransition(update: () => void): void {
 }
 
 type Mode = "skill" | "summary";
-type View = "idle" | "progress" | "result" | "error" | "busy";
+type View = "idle" | "progress" | "error" | "busy";
 
 interface JobSnapshot {
   status: "queued" | "running" | "done" | "error";
@@ -32,6 +34,8 @@ interface JobSnapshot {
   title?: string;
   slug?: string;
   content?: string;
+  videoId?: string;
+  segments?: Segment[];
   errorHeading?: string;
   errorMessage?: string;
 }
@@ -89,13 +93,10 @@ export default function Page() {
   const [view, setView] = useState<View>("idle");
   const [phase, setPhase] = useState<string | undefined>();
   const [elapsed, setElapsed] = useState(0);
-  const [result, setResult] = useState<{ title?: string; slug?: string; content?: string; mode: Mode } | null>(
-    null,
-  );
   const [errorHeading, setErrorHeading] = useState<string | undefined>();
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
-  const [copied, setCopied] = useState(false);
-
+  const router = useRouter();
+  const jobIdRef = useRef<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -122,11 +123,29 @@ export default function Page() {
   const applySnapshot = useCallback(
     (snap: JobSnapshot) => {
       if (snap.status === "done") {
-        withViewTransition(() => {
-          setResult({ title: snap.title, slug: snap.slug, content: snap.content, mode: snap.mode });
-          setView("result");
-        });
         cleanupStream();
+        const id = jobIdRef.current;
+        if (!id || !snap.videoId) {
+          withViewTransition(() => {
+            setErrorHeading("Something went wrong");
+            setErrorMessage(GENERIC_ERROR);
+            setView("error");
+          });
+          return;
+        }
+        const versionId = crypto.randomUUID();
+        void addSession({
+          id,
+          videoId: snap.videoId,
+          title: snap.title || "Your video",
+          mode: snap.mode,
+          slug: snap.slug || id,
+          createdAt: Date.now(),
+          segments: snap.segments ?? [],
+          versions: [{ id: versionId, content: snap.content ?? "", createdAt: Date.now() }],
+          activeVersionId: versionId,
+          messages: [],
+        }).then(() => router.push(`/s/${id}`));
       } else if (snap.status === "error") {
         withViewTransition(() => {
           setErrorHeading(snap.errorHeading || "Something went wrong");
@@ -138,7 +157,7 @@ export default function Page() {
         setPhase(snap.phase);
       }
     },
-    [cleanupStream],
+    [cleanupStream, router],
   );
 
   const startPolling = useCallback(
@@ -223,6 +242,7 @@ export default function Page() {
       }
 
       const { id } = (await res.json()) as { id: string };
+      jobIdRef.current = id;
       startStream(id);
     } catch {
       withViewTransition(() => {
@@ -231,40 +251,6 @@ export default function Page() {
         setView("error");
       });
     }
-  }
-
-  function startNew() {
-    cleanupStream();
-    withViewTransition(() => {
-      setView("idle");
-      setResult(null);
-      setErrorHeading(undefined);
-      setErrorMessage(undefined);
-      setPhase(undefined);
-      setUrl("");
-    });
-  }
-
-  async function copyContent() {
-    if (!result?.content) return;
-    try {
-      await navigator.clipboard.writeText(result.content);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // clipboard access denied/unavailable - nothing more we can do here
-    }
-  }
-
-  function downloadContent() {
-    if (!result?.content) return;
-    const filename = result.mode === "skill" ? `${result.slug}.SKILL.md` : `${result.slug}.md`;
-    const blob = new Blob([result.content], { type: "text/markdown" });
-    const anchor = document.createElement("a");
-    anchor.href = URL.createObjectURL(blob);
-    anchor.download = filename;
-    anchor.click();
-    URL.revokeObjectURL(anchor.href);
   }
 
   const showForm = view === "idle" || view === "error" || view === "busy";
@@ -309,36 +295,6 @@ export default function Page() {
             <div className="elapsed">
               {elapsed}s elapsed
               {elapsed > 25 && <span className="elapsed-note"> — some videos take a little longer, hang tight.</span>}
-            </div>
-          </>
-        )}
-
-        {view === "result" && result && (
-          <>
-            <div className="result-head">
-              {videoId && <VideoPreview videoId={videoId} title={result.title} size="compact" />}
-              <div className="result-head-text">
-                <span className="title">{result.title || "Your video"}</span>
-                <span className="badge">{result.mode}</span>
-              </div>
-            </div>
-
-            <div className="markdown-toolbar">
-              <button className="primary-a" onClick={copyContent}>
-                <CopyIcon />
-                {copied ? "Copied!" : "Copy Markdown"}
-              </button>
-              <button className="ghost" onClick={downloadContent}>
-                <DownloadIcon />
-                Download Markdown
-              </button>
-              <button className="ghost subtle" onClick={startNew}>
-                Start a new one
-              </button>
-            </div>
-
-            <div className="markdown-panel">
-              <MarkdownView content={result.content ?? ""} mode={result.mode} />
             </div>
           </>
         )}
@@ -403,7 +359,9 @@ export default function Page() {
         )}
       </div>
 
-      <p className="footer-note">No sign-up. No history kept. Runs against a shared rate limit.</p>
+      {showForm && <RecentSessions />}
+
+      <p className="footer-note">No sign-up. History stays on this device. Runs against a shared rate limit.</p>
     </>
   );
 }

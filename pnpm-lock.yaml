@@ -57,6 +57,9 @@ importers:
       highlight.js:
         specifier: ^11.12.0
         version: 11.12.0
+      idb-keyval:
+        specifier: ^6.3.0
+        version: 6.3.0
       next:
         specifier: ^15.1.3
         version: 15.5.23(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -990,6 +993,9 @@ packages:
 
   html-url-attributes@3.0.1:
     resolution: {integrity: sha512-ol6UPyBWqsrO6EJySPz2O7ZSr856WDrEzM5zMqp+FJJLGMW35cLYmmZnl0vztAZxRUoNZJFTCohfjuIJ8I4QBQ==}
+
+  idb-keyval@6.3.0:
+    resolution: {integrity: sha512-um+2dgAWmYsu615EXpWVwSmapJhON0G43t3Ka/EVaohzPQXSMqKEqeDK/oIW3Ow+BXaF2PvSc+oBTFp793A5Ow==}
 
   inline-style-parser@0.2.7:
     resolution: {integrity: sha512-Nb2ctOyNR8DqQoR0OwRG95uNWIC0C1lCgf5Naz5H6Ji72KZ8OcFZLz2P5sNgwlyoJ8Yif11oMuYs5pBQa86csA==}
@@ -2108,6 +2114,8 @@ snapshots:
   highlight.js@11.12.0: {}
 
   html-url-attributes@3.0.1: {}
+
+  idb-keyval@6.3.0: {}
 
   inline-style-parser@0.2.7: {}
 

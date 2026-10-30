@@ -13,6 +13,7 @@
     "@upstash/redis": "^1.34.3",
     "@vid2skill/core": "workspace:*",
     "highlight.js": "^11.12.0",
+    "idb-keyval": "^6.3.0",
     "next": "^15.1.3",
     "ogl": "^1.0.11",
     "react": "^19.0.0",

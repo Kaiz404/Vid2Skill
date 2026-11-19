@@ -1,7 +1,7 @@
 import { SkillGenerationFailedError } from "./errors.js";
 import { runLLM } from "./llm.js";
 import { parseSkillMarkdown, parseSummaryMarkdown, SkillOutputError } from "./parsing.js";
-import { buildStdinPayload, SKILL_MODE_INSTRUCTION, SUMMARY_MODE_INSTRUCTION } from "./prompts.js";
+import { buildStdinPayload, focusClause, SKILL_MODE_INSTRUCTION, SUMMARY_MODE_INSTRUCTION } from "./prompts.js";
 import { resolveSkillSlug, slugify } from "./slugs.js";
 import * as transcript from "./transcript.js";
 import { renderSkillMarkdown, renderSummaryMarkdown } from "./writer.js";
@@ -14,6 +14,8 @@ export interface PipelineOptions {
   openrouterApiKey: string;
   timeoutMs?: number;
   onPhase?: OnPhase;
+  /** Optional topic to narrow the output to, e.g. "only the parts about sleep". */
+  focus?: string;
 }
 
 export interface PipelineResult {
@@ -32,13 +34,13 @@ function phase(onPhase: OnPhase, name: string): void {
 }
 
 export async function run(url: string, mode: Mode, options: PipelineOptions): Promise<PipelineResult> {
-  const { supadataApiKey, openrouterApiKey, timeoutMs, onPhase } = options;
+  const { supadataApiKey, openrouterApiKey, timeoutMs, onPhase, focus } = options;
 
   phase(onPhase, "extract");
   const video = await transcript.extract(url, supadataApiKey, onPhase);
 
   const stdinPayload = buildStdinPayload(video.title, video.url, video.transcriptMarkdown);
-  const instruction = mode === "skill" ? SKILL_MODE_INSTRUCTION : SUMMARY_MODE_INSTRUCTION;
+  const instruction = (mode === "skill" ? SKILL_MODE_INSTRUCTION : SUMMARY_MODE_INSTRUCTION) + focusClause(focus);
 
   phase(onPhase, "generate");
   let raw = (await runLLM(instruction, stdinPayload, openrouterApiKey, { timeoutMs })).text;

@@ -35,6 +35,8 @@ export interface Session {
   videoId: string;
   title: string;
   mode: Mode;
+  /** The user's optional "only the parts about…" narrowing from the input page. */
+  focus?: string;
   slug: string;
   createdAt: number;
   segments: Segment[];

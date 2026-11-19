@@ -71,6 +71,7 @@ async function runAndStream(
       openrouterApiKey: env.openrouterApiKey,
       timeoutMs: 280_000,
       onPhase: emitPhase,
+      focus: job.focus,
     });
 
     const updated = await updateJob(id, {

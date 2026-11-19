@@ -1,4 +1,4 @@
-import { buildChatSystemPrompt, streamLLM, transcript, type ChatIntent, type ChatMessage } from "@vid2skill/core";
+import { buildChatSystemPrompt, MAX_FOCUS_CHARS, streamLLM, transcript, type ChatIntent, type ChatMessage } from "@vid2skill/core";
 import { env } from "../../../lib/env";
 import { reserveChatTurn } from "../../../lib/rateLimit";
 
@@ -18,6 +18,7 @@ interface ChatRequest {
   segments: transcript.Segment[];
   document: string;
   messages: ChatMessage[];
+  focus?: string;
 }
 
 /** The body comes straight from the browser, so it's parsed field by field rather than trusted. */
@@ -28,6 +29,7 @@ function parseRequest(body: unknown): ChatRequest | string {
   if (b.mode !== "skill" && b.mode !== "summary") return "mode must be skill or summary.";
   if (typeof b.title !== "string" || typeof b.document !== "string") return "title and document are required.";
   if (b.document.length > MAX_DOCUMENT_CHARS) return "Document is too long.";
+  if (b.focus !== undefined && (typeof b.focus !== "string" || b.focus.length > MAX_FOCUS_CHARS)) return "Malformed focus.";
   if (!Array.isArray(b.segments) || !Array.isArray(b.messages)) return "segments and messages are required.";
 
   const segments: transcript.Segment[] = [];
@@ -52,7 +54,7 @@ function parseRequest(body: unknown): ChatRequest | string {
   }
   if (messages.at(-1)?.role !== "user") return "The last message must be from the user.";
 
-  return { intent: b.intent, mode: b.mode, title: b.title, segments, document: b.document, messages };
+  return { intent: b.intent, mode: b.mode, title: b.title, segments, document: b.document, messages, focus: b.focus };
 }
 
 function ndjson(event: { t: "delta"; v: string } | { t: "error"; message: string } | { t: "done" }): Uint8Array {
@@ -78,6 +80,7 @@ export async function POST(req: Request): Promise<Response> {
     parsed.title,
     transcript.formatTranscript(parsed.segments),
     parsed.document,
+    parsed.focus,
   );
   const tokens = streamLLM([{ role: "system", content: system }, ...parsed.messages], env.openrouterApiKey, req.signal);
 

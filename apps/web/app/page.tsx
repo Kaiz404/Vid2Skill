@@ -41,6 +41,14 @@ interface JobSnapshot {
   errorMessage?: string;
 }
 
+/** Mirrors MAX_FOCUS_CHARS in core; the API enforces the real limit. */
+const MAX_FOCUS_CHARS = 300;
+const FOCUS_EXAMPLES = [
+  "Only the parts about sleep and recovery",
+  "Just the database migration strategy",
+  "Pull out every book or tool recommended",
+];
+
 const BUSY_MESSAGE = "2 of 2 generation slots are busy right now — try again in a minute or two.";
 const GENERIC_ERROR = "Something went wrong. Please try again.";
 
@@ -99,6 +107,7 @@ function useRotatingTip(phase: string | undefined): string {
 export default function Page() {
   const [url, setUrl] = useState("");
   const [mode, setMode] = useState<Mode>("skill");
+  const [focus, setFocus] = useState("");
   const [view, setView] = useState<View>("idle");
   const [phase, setPhase] = useState<string | undefined>();
   const [elapsed, setElapsed] = useState(0);
@@ -148,6 +157,7 @@ export default function Page() {
           videoId: snap.videoId,
           title: snap.title || "Your video",
           mode: snap.mode,
+          focus: focus.trim() || undefined,
           slug: snap.slug || id,
           createdAt: Date.now(),
           segments: snap.segments ?? [],
@@ -166,7 +176,7 @@ export default function Page() {
         setPhase(snap.phase);
       }
     },
-    [cleanupStream, router],
+    [cleanupStream, router, focus],
   );
 
   const startPolling = useCallback(
@@ -233,7 +243,7 @@ export default function Page() {
       const res = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim(), mode }),
+        body: JSON.stringify({ url: url.trim(), mode, focus: focus.trim() || undefined }),
       });
 
       if (res.status === 429) {
@@ -243,7 +253,13 @@ export default function Page() {
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
         withViewTransition(() => {
-          setErrorHeading(body.error === "invalid_url" ? "That doesn't look like a YouTube link" : "Something went wrong");
+          setErrorHeading(
+            body.error === "invalid_url"
+              ? "That doesn't look like a YouTube link"
+              : body.error === "invalid_focus"
+                ? "That focus is too long"
+                : "Something went wrong",
+          );
           setErrorMessage(body.message || GENERIC_ERROR);
           setView("error");
         });
@@ -280,7 +296,9 @@ export default function Page() {
               <AiSphere state={PHASE_SPHERE[phase ?? ""] ?? "working"} size={64} />
               <div>
                 <h2>{mode === "skill" ? "Generating your skill" : "Generating your summary"}</h2>
-                <p className="sub">This usually takes under a minute.</p>
+                <p className="sub">
+                  {focus.trim() ? <>Focusing on “{focus.trim()}”. </> : null}This usually takes under a minute.
+                </p>
               </div>
             </div>
             {videoId && <VideoPreview videoId={videoId} size="large" />}
@@ -354,6 +372,34 @@ export default function Page() {
                 <span className="url-preview-text">Looks like a valid YouTube link</span>
               </div>
             )}
+
+            <label className="focus-field">
+              <span className="focus-label">
+                Focus <span className="focus-optional">optional</span>
+              </span>
+              <textarea
+                rows={2}
+                maxLength={MAX_FOCUS_CHARS}
+                placeholder="Narrow it down, e.g. “only the parts about sleep and recovery”"
+                value={focus}
+                onChange={(e) => setFocus(e.target.value)}
+                disabled={view === "busy"}
+              />
+              {!focus && (
+                <span className="focus-examples">
+                  {FOCUS_EXAMPLES.map((ex) => (
+                    <button key={ex} type="button" onClick={() => setFocus(ex)}>
+                      {ex}
+                    </button>
+                  ))}
+                </span>
+              )}
+              {focus.length > MAX_FOCUS_CHARS - 60 && (
+                <span className="focus-count">
+                  {focus.length}/{MAX_FOCUS_CHARS}
+                </span>
+              )}
+            </label>
 
             <div className={`toggle ${mode === "summary" ? "mode-second" : ""}`}>
               <div className="toggle-thumb" />

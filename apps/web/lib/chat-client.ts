@@ -12,6 +12,7 @@ interface ChatRequest {
   segments: Segment[];
   document: string;
   messages: ChatMessage[];
+  focus?: string;
 }
 
 /** Edit replies are whole documents, which already live in `document`; send a stand-in instead. */

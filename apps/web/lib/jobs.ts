@@ -7,6 +7,7 @@ export interface JobRecord {
   id: string;
   url: string;
   mode: Mode;
+  focus?: string;
   status: JobStatus;
   phase?: string;
   title?: string;
@@ -30,8 +31,8 @@ function lockKey(id: string): string {
   return `vid2skill:lock:${id}`;
 }
 
-export async function createJob(id: string, url: string, mode: Mode): Promise<JobRecord> {
-  const job: JobRecord = { id, url, mode, status: "queued", createdAt: Date.now() };
+export async function createJob(id: string, url: string, mode: Mode, focus?: string): Promise<JobRecord> {
+  const job: JobRecord = { id, url, mode, focus, status: "queued", createdAt: Date.now() };
   await redis().set(jobKey(id), job, { ex: JOB_TTL_SECONDS });
   return job;
 }

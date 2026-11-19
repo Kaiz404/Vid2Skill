@@ -129,3 +129,16 @@ export function CloseIcon() {
     </svg>
   );
 }
+
+export function GripIcon() {
+  return (
+    <svg className="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <circle cx="9" cy="6" r="1.6"></circle>
+      <circle cx="15" cy="6" r="1.6"></circle>
+      <circle cx="9" cy="12" r="1.6"></circle>
+      <circle cx="15" cy="12" r="1.6"></circle>
+      <circle cx="9" cy="18" r="1.6"></circle>
+      <circle cx="15" cy="18" r="1.6"></circle>
+    </svg>
+  );
+}

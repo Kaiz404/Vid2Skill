@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
 import { ChatRequestError, streamChat } from "../lib/chat-client";
+import { citationMarkers } from "../lib/markers";
 import { acceptRevision } from "../lib/revision";
 import {
   activeContent,
@@ -13,6 +14,7 @@ import {
   type Session,
 } from "../lib/session";
 import { ChatPanel, type Draft } from "./chat-panel";
+import { useChatWidth } from "./use-chat-width";
 import { ArrowLeftIcon, CopyIcon, DownloadIcon } from "./icons";
 import { MarkdownView } from "./markdown-view";
 import { PlayerProvider, VideoPlayer } from "./player";
@@ -51,6 +53,7 @@ export function Workspace({ initial }: { initial: Session }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [mobileTab, setMobileTab] = useState<"doc" | "chat">("doc");
   const [copied, setCopied] = useState(false);
+  const chat = useChatWidth();
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -61,7 +64,11 @@ export function Workspace({ initial }: { initial: Session }) {
 
   const docNoun = session.mode === "skill" ? "skill" : "summary";
   const editing = draft?.intent === "edit";
-  const shownContent = editing ? draft.text : activeContent(session);
+  const committedContent = activeContent(session);
+  const shownContent = editing ? draft.text : committedContent;
+  const markers = useMemo(() => citationMarkers(committedContent, session.segments), [committedContent, session.segments]);
+  const lastSegment = session.segments.at(-1);
+  const fallbackDuration = lastSegment ? lastSegment.start + lastSegment.dur : 0;
 
   async function send(intent: ChatIntent, text: string) {
     const userMessage: ChatMessage = { id: crypto.randomUUID(), role: "user", intent, text, createdAt: Date.now() };
@@ -93,6 +100,7 @@ export function Workspace({ initial }: { initial: Session }) {
           intent,
           mode: session.mode,
           title: session.title,
+          focus: session.focus,
           segments: session.segments,
           document: activeContent(session),
           messages: [...session.messages, userMessage],
@@ -167,10 +175,10 @@ export function Workspace({ initial }: { initial: Session }) {
         <ThemeToggle />
       </div>
 
-      <div className="workspace" data-tab={mobileTab}>
+      <div className="workspace" data-tab={mobileTab} style={{ "--chat-width": `${chat.width}px` } as CSSProperties}>
         <div className="main-col">
           <div className="main-scroll">
-            <VideoPlayer videoId={session.videoId} />
+            <VideoPlayer videoId={session.videoId} markers={markers} fallbackDuration={fallbackDuration} />
 
             <div className={`toggle workspace-tabs ${mobileTab === "chat" ? "mode-second" : ""}`}>
               <div className="toggle-thumb" />
@@ -187,6 +195,11 @@ export function Workspace({ initial }: { initial: Session }) {
                 <div className="result-head-text">
                   <span className="title">{session.title}</span>
                   <span className="badge">{session.mode}</span>
+                  {session.focus && (
+                    <span className="focus-chip" title={session.focus}>
+                      Focus: {session.focus}
+                    </span>
+                  )}
                 </div>
                 <div className="markdown-toolbar">
                   {session.versions.length > 1 && (
@@ -221,6 +234,18 @@ export function Workspace({ initial }: { initial: Session }) {
             </section>
           </div>
         </div>
+
+        <div
+          className={`split-handle ${chat.dragging ? "dragging" : ""}`}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize chat"
+          aria-valuenow={chat.width}
+          tabIndex={0}
+          onPointerDown={chat.onPointerDown}
+          onKeyDown={chat.onKeyDown}
+          onDoubleClick={chat.reset}
+        />
 
         <ChatPanel
           messages={session.messages}

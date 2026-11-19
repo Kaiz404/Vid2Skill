@@ -75,4 +75,23 @@ describe("pipeline.run (summary mode)", () => {
     expect(result.slug).toBe("some-video");
     expect(result.content).toContain("# Some Video");
   });
+
+  it("narrows the instruction to the user's focus", async () => {
+    const runLLM = vi.mocked(llmModule.runLLM);
+    runLLM.mockResolvedValue({ text: "# Some Video\n\n## Summary\ntext" });
+
+    await pipeline.run("https://www.youtube.com/watch?v=abc12345678", "summary", { ...OPTIONS, focus: "  sleep hygiene " });
+
+    const instruction = runLLM.mock.calls.at(-1)![0];
+    expect(instruction).toContain('USER FOCUS: the user only wants the parts of this video about: "sleep hygiene"');
+  });
+
+  it("leaves the instruction untouched without a focus", async () => {
+    const runLLM = vi.mocked(llmModule.runLLM);
+    runLLM.mockResolvedValue({ text: "# Some Video\n\n## Summary\ntext" });
+
+    await pipeline.run("https://www.youtube.com/watch?v=abc12345678", "summary", { ...OPTIONS, focus: "   " });
+
+    expect(runLLM.mock.calls.at(-1)![0]).not.toContain("USER FOCUS");
+  });
 });

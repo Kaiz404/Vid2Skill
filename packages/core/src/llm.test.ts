@@ -21,10 +21,22 @@ afterEach(() => {
 });
 
 describe("streamLLM", () => {
-  it("falls through to the next model when one fails before its first token", async () => {
+  it("falls through to the next model on a non-ok response", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: "gone" } }), { status: 404 }))
+      .mockResolvedValueOnce(sseResponse([delta("Hel"), delta("lo [1:05]"), "data: [DONE]"]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const text = await collect(streamLLM([{ role: "user", content: "hi" }], "key"));
+
+    expect(text).toBe("Hello [1:05]");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls through to the next model when a stream ends before its first token", async () => {
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(sseResponse([": OPENROUTER PROCESSING", "data: {\"choices\":[]}"]))
       .mockResolvedValueOnce(sseResponse([delta("Hel"), delta("lo [1:05]"), "data: [DONE]"]));
     vi.stubGlobal("fetch", fetchMock);
@@ -32,7 +44,7 @@ describe("streamLLM", () => {
     const text = await collect(streamLLM([{ role: "user", content: "hi" }], "key"));
 
     expect(text).toBe("Hello [1:05]");
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("throws LLMError listing every model when all fail", async () => {

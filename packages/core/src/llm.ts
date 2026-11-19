@@ -2,14 +2,13 @@ import { LLMError } from "./errors.js";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-/** Tried in order until one succeeds. The old default (`nemotron-3-super`) has been
- *  intermittently 404 from NVIDIA's OpenRouter provider since early 2026. */
-const MODEL_CASCADE = [
-  "nvidia/nemotron-3-ultra-550b-a55b:free", 
-  "nvidia/nemotron-3.5-super-vl:free",
-  "nvidia/nemotron-3.5-lightning:free",
-  "openrouter/free",
-] as const;
+/** Tried in order until one succeeds. OpenRouter's free catalog is small and the
+ *  nvidia/nemotron `:free` slugs this used to list were deprecated: with Zero Data
+ *  Retention enabled account-wide, they 404 as a ZDR-guardrail violation, and even
+ *  without ZDR they no longer resolve to a free endpoint at all. Ling is the only
+ *  other standalone free model worth naming directly; `openrouter/free` is an
+ *  auto-routed catch-all over the rest of the shared free pool. */
+const MODEL_CASCADE = ["inclusionai/ling-3.2-flash:free", "openrouter/free"] as const;
 
 export interface LLMResult {
   text: string;
@@ -53,7 +52,7 @@ async function callModel(
         { role: "user", content: stdinContent },
       ],
       max_tokens: 16_384,
-      // Nemotron free models often emit chain-of-thought in `reasoning` and leave `content` empty.
+      // Some free models emit chain-of-thought in `reasoning` and leave `content` empty otherwise.
       reasoning: { effort: "none" },
     }),
     signal,

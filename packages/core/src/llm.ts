@@ -2,13 +2,74 @@ import { LLMError } from "./errors.js";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-/** Tried in order until one succeeds. OpenRouter's free catalog is small and the
- *  nvidia/nemotron `:free` slugs this used to list were deprecated: with Zero Data
- *  Retention enabled account-wide, they 404 as a ZDR-guardrail violation, and even
- *  without ZDR they no longer resolve to a free endpoint at all. Ling is the only
- *  other standalone free model worth naming directly; `openrouter/free` is an
- *  auto-routed catch-all over the rest of the shared free pool. */
-const MODEL_CASCADE = ["inclusionai/ling-3.2-flash:free", "openrouter/free"] as const;
+/** Tried in order until one succeeds. These are the free models with Zero Data Retention
+ *  endpoints, so they keep working if ZDR is switched on for the account again (every
+ *  other `:free` model then 404s as a guardrail violation). They sit on shared upstream
+ *  pools that 429 at busy moments; `openrouter/free` routes across whatever free models
+ *  the account's privacy settings allow, so it is the widest net and goes last. */
+const MODEL_CASCADE = [
+  "inclusionai/ling-3.2-flash:free",
+  "google/gemma-4-31b-it:free",
+  "google/gemma-4-26b-a4b-it:free",
+  "openrouter/free",
+] as const;
+
+/** When every model was rate-limited, wait this long and run the cascade once more. */
+const RATE_LIMIT_RETRY_MS = 2_500;
+const PASSES = 2;
+
+/** One model's failure; a 429 means "busy right now", which is worth one more pass. */
+class ModelError extends LLMError {
+  constructor(
+    message: string,
+    readonly rateLimited: boolean,
+  ) {
+    super(message);
+  }
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+      },
+      { once: true },
+    );
+  });
+}
+
+/** OpenRouter wraps upstream failures as "Provider returned error"; the cause is in `metadata.raw`. */
+function failure(model: string, status: number, payload: OpenRouterResponse): ModelError {
+  const detail = payload.error?.metadata?.raw ?? payload.error?.message ?? `status ${status}`;
+  return new ModelError(`${model}: ${detail}`, status === 429);
+}
+
+/**
+ * Runs `attempt` against each model in the cascade until one succeeds. If every model
+ * failed only because it was rate-limited, waits and makes one more pass.
+ */
+async function withCascade<T>(attempt: (model: string) => Promise<T>, signal?: AbortSignal): Promise<T> {
+  const errors: string[] = [];
+  for (let pass = 0; pass < PASSES; pass++) {
+    if (pass > 0) await sleep(RATE_LIMIT_RETRY_MS, signal);
+    let allRateLimited = true;
+    for (const model of MODEL_CASCADE) {
+      try {
+        return await attempt(model);
+      } catch (e) {
+        if ((e as Error).name === "AbortError") throw e;
+        if (!(e instanceof ModelError && e.rateLimited)) allRateLimited = false;
+        errors.push((e as Error).message);
+      }
+    }
+    if (!allRateLimited) break;
+  }
+  throw new LLMError(errors.join(" | ") || "All OpenRouter models failed");
+}
 
 export interface LLMResult {
   text: string;
@@ -21,7 +82,7 @@ interface OpenRouterMessage {
 
 interface OpenRouterResponse {
   choices?: { message?: OpenRouterMessage }[];
-  error?: { message?: string };
+  error?: { message?: string; metadata?: { raw?: string } };
 }
 
 function extractAssistantText(message: OpenRouterMessage | undefined): string {
@@ -60,10 +121,7 @@ async function callModel(
 
   const payload = (await res.json()) as OpenRouterResponse;
 
-  if (!res.ok) {
-    const message = payload.error?.message ?? `OpenRouter returned status ${res.status}`;
-    throw new LLMError(`${model}: ${message}`);
-  }
+  if (!res.ok) throw failure(model, res.status, payload);
 
   const text = extractAssistantText(payload.choices?.[0]?.message);
   if (!text) {
@@ -87,28 +145,19 @@ export async function runLLM(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  const errors: string[] = [];
-
   try {
-    for (const model of MODEL_CASCADE) {
-      try {
-        const text = await callModel(model, instruction, stdinContent, apiKey, controller.signal);
-        return { text };
-      } catch (e) {
-        if ((e as Error).name === "AbortError") {
-          throw new LLMError(`OpenRouter call timed out after ${timeoutMs / 1000}s`);
-        }
-        errors.push((e as Error).message);
-      }
-    }
+    const text = await withCascade(
+      (model) => callModel(model, instruction, stdinContent, apiKey, controller.signal),
+      controller.signal,
+    );
+    return { text };
   } catch (e) {
+    if (controller.signal.aborted) throw new LLMError(`OpenRouter call timed out after ${timeoutMs / 1000}s`);
     if (e instanceof LLMError) throw e;
     throw new LLMError(`Failed to reach OpenRouter: ${(e as Error).message}`);
   } finally {
     clearTimeout(timer);
   }
-
-  throw new LLMError(errors.join(" | ") || "All OpenRouter models failed");
 }
 
 export interface ChatMessage {
@@ -158,9 +207,7 @@ export async function* streamLLM(
   apiKey: string,
   signal?: AbortSignal,
 ): AsyncGenerator<string> {
-  const errors: string[] = [];
-
-  for (const model of MODEL_CASCADE) {
+  const { first, stream } = await withCascade(async (model) => {
     let res: Response;
     try {
       res = await fetch(OPENROUTER_URL, {
@@ -171,34 +218,19 @@ export async function* streamLLM(
       });
     } catch (e) {
       if ((e as Error).name === "AbortError") throw e;
-      errors.push(`${model}: ${(e as Error).message}`);
-      continue;
+      throw new ModelError(`${model}: ${(e as Error).message}`, false);
     }
 
     if (!res.ok) {
-      const payload = (await res.json().catch(() => ({}))) as OpenRouterResponse;
-      errors.push(`${model}: ${payload.error?.message ?? `status ${res.status}`}`);
-      continue;
+      throw failure(model, res.status, (await res.json().catch(() => ({}))) as OpenRouterResponse);
     }
 
     const stream = readModelStream(res, model);
-    let first: IteratorResult<string>;
-    try {
-      first = await stream.next();
-    } catch (e) {
-      if ((e as Error).name === "AbortError") throw e;
-      errors.push((e as Error).message);
-      continue;
-    }
-    if (first.done) {
-      errors.push(`${model}: OpenRouter returned an empty result`);
-      continue;
-    }
+    const first = await stream.next();
+    if (first.done) throw new ModelError(`${model}: OpenRouter returned an empty result`, false);
+    return { first: first.value, stream };
+  }, signal);
 
-    yield first.value;
-    yield* stream;
-    return;
-  }
-
-  throw new LLMError(errors.join(" | ") || "All OpenRouter models failed");
+  yield first;
+  yield* stream;
 }

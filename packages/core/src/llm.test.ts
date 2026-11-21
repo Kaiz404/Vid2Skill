@@ -48,8 +48,55 @@ describe("streamLLM", () => {
   });
 
   it("throws LLMError listing every model when all fail", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 503 })));
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 503 }));
+    vi.stubGlobal("fetch", fetchMock);
 
     await expect(collect(streamLLM([{ role: "user", content: "hi" }], "key"))).rejects.toThrow(LLMError);
+    // A hard failure isn't "busy right now", so there's no second pass.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("retries the cascade once when every model was rate-limited", async () => {
+    vi.useFakeTimers();
+    try {
+      const busy = () =>
+        new Response(
+          JSON.stringify({ error: { message: "Provider returned error", metadata: { raw: "rate-limited upstream" } } }),
+          { status: 429 },
+        );
+      const fetchMock = vi.fn(async () => busy());
+      for (let i = 0; i < 4; i++) fetchMock.mockResolvedValueOnce(busy());
+      fetchMock.mockResolvedValueOnce(sseResponse([delta("ok"), "data: [DONE]"]));
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = collect(streamLLM([{ role: "user", content: "hi" }], "key"));
+      await vi.advanceTimersByTimeAsync(3_000);
+
+      expect(await result).toBe("ok");
+      expect(fetchMock).toHaveBeenCalledTimes(5);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("names the upstream cause when the retry pass is still rate-limited", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          async () =>
+            new Response(JSON.stringify({ error: { message: "Provider returned error", metadata: { raw: "rpm_limit_exceeded" } } }), {
+              status: 429,
+            }),
+        ),
+      );
+      const result = collect(streamLLM([{ role: "user", content: "hi" }], "key"));
+      const assertion = expect(result).rejects.toThrow(/rpm_limit_exceeded/);
+      await vi.advanceTimersByTimeAsync(3_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

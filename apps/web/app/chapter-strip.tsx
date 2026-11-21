@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import type { Marker } from "../lib/markers";
 import { usePlayback, useSeek } from "./player";
 
@@ -56,6 +56,18 @@ export function ChapterStrip({ markers, fallbackDuration, variant }: ChapterStri
   }, [hover, markers, duration]);
   const tip = focused ?? nearest;
 
+  // Center the tooltip on its moment, but slide it inward near either end so it never clips.
+  const tipRef = useRef<HTMLDivElement>(null);
+  const tipAt = tip ? tip.seconds / duration : hover ? hover.x / hover.width : null;
+  useLayoutEffect(() => {
+    const el = tipRef.current;
+    const track = trackRef.current;
+    if (!el || !track || tipAt === null) return;
+    const half = el.offsetWidth / 2;
+    const x = Math.min(Math.max(tipAt * track.clientWidth, half), Math.max(half, track.clientWidth - half));
+    el.style.left = `${x}px`;
+  });
+
   function onMove(e: PointerEvent<HTMLDivElement>) {
     const r = trackRef.current!.getBoundingClientRect();
     setHover({ x: Math.min(Math.max(e.clientX - r.left, 0), r.width), width: r.width });
@@ -95,7 +107,8 @@ export function ChapterStrip({ markers, fallbackDuration, variant }: ChapterStri
               data-tone={tones.get(m.section ?? "") ?? 0}
               style={{ left: pct(m.seconds), "--swell": swell.toFixed(2) } as CSSProperties}
               aria-label={`${formatTime(m.seconds)}: ${m.label}`}
-              onFocus={() => setFocused(m)}
+              // Only keyboard focus pins the tooltip; a clicked marker keeps focus but shouldn't keep it open.
+              onFocus={(e) => e.currentTarget.matches(":focus-visible") && setFocused(m)}
               onBlur={() => setFocused(null)}
               onClick={(e) => {
                 e.stopPropagation();
@@ -105,7 +118,7 @@ export function ChapterStrip({ markers, fallbackDuration, variant }: ChapterStri
           );
         })}
         {tip ? (
-          <div className="chapter-tip" style={{ left: pct(tip.seconds) }}>
+          <div className="chapter-tip" ref={tipRef}>
             <span className="chapter-tip-head">
               <span className="chapter-time">{formatTime(tip.seconds)}</span>
               {tip.section && <span className="chapter-tip-section">{tip.section}</span>}
@@ -115,7 +128,7 @@ export function ChapterStrip({ markers, fallbackDuration, variant }: ChapterStri
         ) : (
           hover &&
           hoverSeconds !== null && (
-            <div className="chapter-tip chapter-tip-time" style={{ left: hover.x }}>
+            <div className="chapter-tip chapter-tip-time" ref={tipRef}>
               {formatTime(hoverSeconds)}
             </div>
           )

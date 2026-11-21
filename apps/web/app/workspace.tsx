@@ -178,7 +178,7 @@ export function Workspace({ initial }: { initial: Session }) {
       <div className="workspace" data-tab={mobileTab} style={{ "--chat-width": `${chat.width}px` } as CSSProperties}>
         <div className="main-col">
           <div className="main-scroll">
-            <VideoPlayer videoId={session.videoId} markers={markers} fallbackDuration={fallbackDuration} />
+            <VideoPlayer videoId={session.videoId} title={session.title} markers={markers} fallbackDuration={fallbackDuration} />
 
             <div className={`toggle workspace-tabs ${mobileTab === "chat" ? "mode-second" : ""}`}>
               <div className="toggle-thumb" />

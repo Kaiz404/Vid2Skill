@@ -158,9 +158,8 @@ const MIN_MINI_WIDTH = 240;
 const MAX_MINI_WIDTH = 760;
 /** Height of the compact chapter strip under the floating video. */
 const MINI_STRIP_HEIGHT = 18;
-/** The magnet starts pulling when the cursor comes this close to the mini player. */
-const MAGNET_RADIUS = 150;
-const MAGNET_PULL = 14;
+/** Height of the mini player's own control bar, above the video so it never covers YouTube's controls. */
+const MINI_BAR_HEIGHT = 32;
 
 const AREA_SELECTOR: Record<Area, string> = { main: ".main-scroll", chat: ".chat-panel" };
 
@@ -178,7 +177,7 @@ function clampWidth(width: number, rect: DOMRect): number {
 }
 
 function miniHeight(width: number, hasStrip: boolean): number {
-  return (width * 9) / 16 + (hasStrip ? MINI_STRIP_HEIGHT : 0);
+  return MINI_BAR_HEIGHT + (width * 9) / 16 + (hasStrip ? MINI_STRIP_HEIGHT : 0);
 }
 
 function cornerPosition(rect: DOMRect, corner: Corner, width: number, height: number) {
@@ -238,12 +237,14 @@ function trackPointer(
 
 interface VideoPlayerProps {
   videoId: string;
+  /** Shown in the mini player's bar. */
+  title: string;
   markers: Marker[];
   /** Used for the strip until the player reports the real duration. */
   fallbackDuration: number;
 }
 
-export function VideoPlayer({ videoId, markers, fallbackDuration }: VideoPlayerProps) {
+export function VideoPlayer({ videoId, title, markers, fallbackDuration }: VideoPlayerProps) {
   const ctx = useContext(PlayerContext);
   const handleRef = ctx?.handle;
   const clock = ctx?.clock;
@@ -377,35 +378,6 @@ export function VideoPlayer({ videoId, markers, fallbackDuration }: VideoPlayerP
     );
   }, [docked]);
 
-  // Magnetic pull: the mini player leans toward a cursor that comes near it.
-  useEffect(() => {
-    const card = cardRef.current;
-    if (!docked || interaction || !card || prefersReducedMotion()) return;
-    const setPull = (x: number, y: number, near: boolean) => {
-      card.style.setProperty("--mx", `${x.toFixed(1)}px`);
-      card.style.setProperty("--my", `${y.toFixed(1)}px`);
-      card.toggleAttribute("data-near", near);
-    };
-    const onMove = (ev: PointerEvent) => {
-      const r = card.getBoundingClientRect();
-      const dx = ev.clientX - Math.min(Math.max(ev.clientX, r.left), r.right);
-      const dy = ev.clientY - Math.min(Math.max(ev.clientY, r.top), r.bottom);
-      const d = Math.hypot(dx, dy);
-      if (d === 0) return setPull(0, 0, true);
-      if (d > MAGNET_RADIUS) return setPull(0, 0, false);
-      const k = (1 - d / MAGNET_RADIUS) ** 2 * MAGNET_PULL;
-      setPull((dx / d) * k, (dy / d) * k, true);
-    };
-    const onLeave = () => setPull(0, 0, false);
-    document.addEventListener("pointermove", onMove);
-    document.documentElement.addEventListener("pointerleave", onLeave);
-    return () => {
-      document.removeEventListener("pointermove", onMove);
-      document.documentElement.removeEventListener("pointerleave", onLeave);
-      setPull(0, 0, false);
-    };
-  }, [docked, interaction]);
-
   function startDrag(e: ReactPointerEvent<HTMLDivElement>) {
     if (e.button !== 0 || (e.target as Element).closest("button")) return;
     const r = cardRef.current!.getBoundingClientRect();
@@ -451,7 +423,7 @@ export function VideoPlayer({ videoId, markers, fallbackDuration }: VideoPlayerP
     const anchorY = dock.corner[0] === "b" ? r.bottom : r.top;
     const widthAt = (ev: PointerEvent) => {
       const byX = Math.abs(anchorX - ev.clientX);
-      const byY = ((Math.abs(anchorY - ev.clientY) - (hasStrip ? MINI_STRIP_HEIGHT : 0)) * 16) / 9;
+      const byY = ((Math.abs(anchorY - ev.clientY) - MINI_BAR_HEIGHT - (hasStrip ? MINI_STRIP_HEIGHT : 0)) * 16) / 9;
       return clampWidth(Math.max(byX, byY), rect);
     };
     setInteraction("resize");
@@ -496,7 +468,7 @@ export function VideoPlayer({ videoId, markers, fallbackDuration }: VideoPlayerP
                 <span className="mini-grip">
                   <GripIcon />
                 </span>
-                <span className="mini-spacer" />
+                <span className="mini-title">{title}</span>
                 <button
                   type="button"
                   className="mini-btn"

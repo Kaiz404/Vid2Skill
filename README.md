@@ -3,9 +3,9 @@
 ![TypeScript](https://img.shields.io/badge/typescript-5.7-blue)
 ![Status](https://img.shields.io/badge/status-early--wip-yellow)
 
-Turn a YouTube video into a Claude Agent Skill or a markdown summary. Try it live at the deployed dashboard, or run it as a CLI.
+Turn a YouTube video into a Claude Agent Skill or a markdown summary, then read it next to the video and chat with it. Try it live at the deployed dashboard, or run it as a CLI.
 
-<video src="https://github.com/user-attachments/assets/2f6f5d67-9e89-4bb9-b1eb-e3f653b383c5" controls muted width="720"></video>
+<video src="https://github.com/user-attachments/assets/3ac8f856-36f4-4761-9bcf-4d674644e979" controls muted width="720"></video>
 
 ## Why this exists
 
@@ -13,13 +13,20 @@ I consume a lot of educational content, and a lot of the best resources I learn 
 
 On top of that, most of what I learn from these videos ends up getting applied back into agents and my own projects anyway. So instead of watching a video, taking notes by hand, and then turning those notes into something an agent can use, I figured I'd just cut out the middle step entirely.
 
-`vid2skill` takes a YouTube URL, pulls the transcript, and hands it to an LLM to turn directly into either a [Claude Agent Skill](https://claude.com/blog/skills) (a `SKILL.md` ready to drop into any project) or a clean markdown summary — whichever you need.
+`vid2skill` takes a YouTube URL, pulls the timestamped transcript, and hands it to an LLM to turn directly into either a [Claude Agent Skill](https://claude.com/blog/skills) (a `SKILL.md` ready to drop into any project) or a clean markdown summary — whichever you need.
 
 ## What it does
 
 - **Skill mode** — generates a `SKILL.md` with proper YAML frontmatter (`name` + `description`), structured into an overview, key concepts, step-by-step instructions, and a reference section. Drop it straight into `.claude/skills/` in any project.
-- **Summary mode** — generates a plain markdown summary (summary, key points, notable details) when you just want the notes, not a skill.
-- **A dashboard that doesn't leave you hanging** — paste a link and watch a live two-step progress stream (fetching the transcript, generating with AI, auto-retrying once if the output comes back malformed) instead of staring at a spinner with no context.
+- **Summary mode** — generates a markdown summary (summary, key points, notable details) when you just want the notes. Every claim carries a `[m:ss]` citation back to the moment in the video that supports it.
+- **Focus** — optionally say what you care about ("the practical habits he recommends for coding with AI") and the output is steered toward that instead of covering everything evenly.
+- **A workspace, not just a download** — finished results open full screen beside the video:
+  - Citations render as chips that jump the embedded player to that moment.
+  - A timeline under the player marks every cited moment.
+  - Scroll past the video and it docks into a floating mini player, so you can keep listening while you read.
+- **Chat with the video** — ask questions grounded in the transcript, or ask for edits ("make the steps shorter", "add a section on testing") and the document is revised in place.
+- **A dashboard that doesn't leave you hanging** — paste a link and watch a live progress stream (fetching the transcript, generating with AI, auto-retrying once if the output comes back malformed) instead of staring at a spinner with no context.
+- **No sign-up** — your last 20 sessions are kept in your browser (IndexedDB), nothing on the server.
 - **A CLI for the terminal-first workflow** — same pipeline, same phase-by-phase spinner, writes straight to `./output`.
 
 ## Example output
@@ -56,18 +63,23 @@ That's a 20-minute talk turned into something I can skim in under a minute and i
 
 A pnpm-workspaces TypeScript monorepo, no Turborepo/Nx needed at this scale:
 
-- `packages/core/` — the shared pipeline: a [Supadata](https://supadata.ai) transcript client, an [OpenRouter](https://openrouter.ai) LLM client, prompt templates, `SKILL.md` parsing/writing, and slug logic. Exposes the same phase-callback pattern (`extract` → `fetch_captions` → `generate` → `retry`? → `write`) that both the CLI and the web app subscribe to.
+- `packages/core/` — the shared pipeline: a [Supadata](https://supadata.ai) client for timestamped transcripts, an [OpenRouter](https://openrouter.ai) LLM client (one-shot and streaming), prompt templates for generation and chat, `SKILL.md` parsing/writing, and slug logic. Exposes the same phase-callback pattern (`extract` → `fetch_captions` → `generate` → `retry`? → `write`) that both the CLI and the web app subscribe to.
 - `apps/cli/` — a thin CLI wrapper around `packages/core`, with a spinner that cycles flavor text per pipeline phase.
-- `apps/web/` — a Next.js dashboard (paste a URL, watch progress over Server-Sent Events, get back a Skill or Summary) plus its API routes. Global (not per-user) rate limiting — a concurrency cap and an hourly quota — is backed by Upstash Redis, since Vercel functions share no memory across invocations.
+- `apps/web/` — a Next.js dashboard and its API routes:
+  - `POST /api/jobs` + `GET /api/jobs/[id]/stream` — start a generation and stream its progress over Server-Sent Events.
+  - `POST /api/chat` — streams chat answers and document edits as NDJSON.
+  - Global (not per-user) rate limiting, backed by Upstash Redis since Vercel functions share no memory across invocations.
 
-No accounts, no auth, no history kept server-side — jobs live in Redis for an hour and then expire.
+LLM calls run through a cascade of free OpenRouter models. If every model is rate-limited, the cascade waits and tries once more before failing.
+
+No accounts, no auth, no history kept server-side — jobs live in Redis for an hour and then expire, and finished sessions live only in your browser.
 
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) 20+
 - [pnpm](https://pnpm.io/) 10+
 - A [Supadata](https://supadata.ai) API key (free tier: 100 credits/month)
-- An [OpenRouter](https://openrouter.ai) API key (the pipeline uses OpenRouter's free model cascade)
+- An [OpenRouter](https://openrouter.ai) API key (the pipeline uses OpenRouter's free models)
 - For `apps/web` only: an [Upstash Redis](https://upstash.com) database (REST URL + token, free tier)
 
 ## Install
@@ -98,6 +110,8 @@ node apps/cli/dist/index.js "https://youtu.be/..." --mode summary
 | `--output-dir <dir>` | `./output` | Where the generated file gets written |
 | `--timeout <seconds>` | `300` | Seconds to wait for the LLM call |
 
+Focus, chat and the workspace are web-only for now.
+
 ## Web app
 
 ```bash
@@ -120,7 +134,7 @@ pnpm build        # build packages/core, apps/cli, apps/web
 ## Caveats
 
 > [!NOTE]
-> The rate-limiting numbers (2 concurrent jobs, 30 generations/hour, both global across all visitors) are conservative starting defaults for a low-traffic showcase, tuned to protect the free OpenRouter/Supadata tiers — not final figures.
+> The rate limits are global across all visitors: 2 concurrent generations, 30 generations/hour, and 150 chat turns/hour. They're conservative defaults for a low-traffic showcase, tuned to protect the free OpenRouter/Supadata tiers — not final figures.
 
 > [!WARNING]
 > This is a young, single-author project — no automated CI, no published package, no license yet. It works well enough for daily use on my end, but expect rough edges.

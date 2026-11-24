@@ -5,7 +5,11 @@
 
 Turn a YouTube video into a Claude Agent Skill or a markdown summary, then read it next to the video and chat with it. Try it live at the deployed dashboard, or run it as a CLI.
 
-<video src="https://github.com/user-attachments/assets/3ac8f856-36f4-4761-9bcf-4d674644e979" controls muted width="720"></video>
+
+
+https://github.com/user-attachments/assets/3d697cfc-10a9-4e33-96b5-6fedd40e7d5a
+
+
 
 ## Why this exists
 
